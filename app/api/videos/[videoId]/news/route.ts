@@ -82,6 +82,38 @@ function parseCsvRows(text: string): Record<string, string>[] {
   return rows
 }
 
+function toTaxonomyRows(rows: Record<string, string>[]): TaxonomyRow[] {
+  return rows
+    .map((row) => ({
+      taxonomy_id: row.taxonomy_id,
+      sector: row.sector,
+      category: row.category,
+      subcategory: row.subcategory,
+    }))
+    .filter((row) =>
+      Boolean(row.taxonomy_id && row.sector && row.category && row.subcategory)
+    )
+}
+
+function toTaxonomyIndustryRows(rows: Record<string, string>[]): TaxonomyIndustryRow[] {
+  return rows
+    .map((row) => ({
+      taxonomy_id: row.taxonomy_id,
+      subindustry_id: row.subindustry_id,
+    }))
+    .filter((row) => Boolean(row.taxonomy_id && row.subindustry_id))
+}
+
+function toStockExampleRows(rows: Record<string, string>[]): StockExampleRow[] {
+  return rows
+    .map((row) => ({
+      ticker: row.ticker,
+      company_name: row.company_name,
+      subindustry_id: row.subindustry_id,
+    }))
+    .filter((row) => Boolean(row.ticker && row.company_name && row.subindustry_id))
+}
+
 async function loadTaxonomyData() {
   if (taxonomyCache) return taxonomyCache
 
@@ -109,9 +141,9 @@ async function loadTaxonomyData() {
     fs.readFile(path.join(base, 'stock_example_mapping.csv'), 'utf-8').catch(() => ''),
   ])
   taxonomyCache = {
-    taxonomyRows: parseCsvRows(taxonomyCsv) as TaxonomyRow[],
-    mappingRows: parseCsvRows(mappingCsv) as TaxonomyIndustryRow[],
-    stockRows: parseCsvRows(stockCsv) as StockExampleRow[],
+    taxonomyRows: toTaxonomyRows(parseCsvRows(taxonomyCsv)),
+    mappingRows: toTaxonomyIndustryRows(parseCsvRows(mappingCsv)),
+    stockRows: toStockExampleRows(parseCsvRows(stockCsv)),
   }
   return taxonomyCache
 }
