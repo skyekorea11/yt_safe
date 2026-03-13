@@ -75,6 +75,10 @@ export default function DashboardPage() {
 
   const { filteredVideos } = useVideoFilter(videos)
   const { enableTranscriptPipeline } = useSummaryPreferences()
+  const channelTitleById = useMemo(
+    () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.title])),
+    [channels]
+  )
 
   useEffect(() => { loadData() }, [])
   useEffect(() => { setNewsFavorites(loadNewsFavorites()) }, [])
@@ -115,6 +119,9 @@ export default function DashboardPage() {
     if (!refreshStatus?.lastRefreshed) return false
     return new Date(video.created_at).getTime() >= new Date(refreshStatus.lastRefreshed).getTime() - 60000
   }
+
+  const getChannelDisplayName = (video: Video) =>
+    video.channel_title || channelTitleById.get(video.youtube_channel_id) || '채널 정보 없음'
 
   const formatPublishedDate = (value: string | null) => {
     if (!value) return ''
@@ -433,11 +440,9 @@ export default function DashboardPage() {
                           />
                         </button>
                       </div>
-                      {video.channel_title ? (
-                        <p className="mt-1 text-xs text-gray-400 truncate">
-                          {video.channel_title}
-                        </p>
-                      ) : null}
+                      <p className="mt-1 text-xs text-gray-400 truncate">
+                        {getChannelDisplayName(video)}
+                      </p>
                       <p className="mt-0.5 text-xs text-gray-300 flex items-center gap-1">
                         {isNewVideo(video) && (
                           <span className="px-1 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-semibold leading-none">New</span>

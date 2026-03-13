@@ -73,6 +73,10 @@ export default function FavoritesPage() {
   const [stocksLoadingByVideoId, setStocksLoadingByVideoId] = useState<Record<string, boolean>>({})
 
   const prevLastRefreshed = useRef<string | null>(null)
+  const channelTitleById = useMemo(
+    () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.title])),
+    [channels]
+  )
 
   useEffect(() => { loadAll() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -230,6 +234,9 @@ export default function FavoritesPage() {
     }
   }
 
+  const getChannelDisplayName = (video: Video) =>
+    video.channel_title || channelTitleById.get(video.youtube_channel_id) || '채널 정보 없음'
+
   const handleSaveNote = async () => {
     if (!selectedVideoId) return
     setIsNoteSaving(true)
@@ -350,7 +357,7 @@ export default function FavoritesPage() {
               </button>
             </div>
             <p className="mt-0.5 text-xs text-gray-400">
-              {video.channel_title || video.youtube_channel_id} · {formatDate(video.published_at)}
+              {getChannelDisplayName(video)} · {formatDate(video.published_at)}
             </p>
             {stocks.length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-1">
@@ -565,7 +572,7 @@ export default function FavoritesPage() {
               {selectedVideo ? (
                 <div className="mt-3 space-y-3">
                   <div className="rounded-xl border border-gray-100 p-3">
-                    <p className="text-xs text-gray-400">{selectedVideo.channel_title || selectedVideo.youtube_channel_id}</p>
+                    <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
                     <p className="mt-1 text-sm font-medium text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                   </div>
                   <textarea
