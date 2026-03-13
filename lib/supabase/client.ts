@@ -24,20 +24,16 @@ let supabase: SupabaseClient
 if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey)
 } else {
-  // Create a dummy client that returns empty data
-  console.warn('Supabase credentials not configured, using dummy client')
-  supabase = {
-    from: () => ({
-      select: () => Promise.resolve({ data: [], error: null }),
-      insert: () => Promise.resolve({ data: null, error: null }),
-      update: () => Promise.resolve({ data: null, error: null }),
-      delete: () => Promise.resolve({ data: null, error: null }),
-      eq: () => ({
-        single: () => Promise.resolve({ data: null, error: null }),
-        select: () => Promise.resolve({ data: [], error: null }),
-      }),
-    }),
-  } as unknown as SupabaseClient
+  // Fail fast so deployment issues are visible instead of silently returning empty lists.
+  console.warn('Supabase credentials not configured')
+  const missingError = () => {
+    throw new Error('Supabase environment variables are missing (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)')
+  }
+  supabase = new Proxy({} as SupabaseClient, {
+    get() {
+      return missingError
+    },
+  })
 }
 
 export { supabase }
