@@ -16,7 +16,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_MENU = [
   { label: '뉴스 채널 관리', href: '/settings#news-channels' },
-  { label: '채널별 기사/주식 추천 강도', href: '/settings#channel-stock-mode' },
+  { label: '채널별 기사/영상 추천 관리', href: '/settings#channel-stock-mode' },
   { label: '표시 설정', href: '/settings#display-preferences' },
 ] as const
 

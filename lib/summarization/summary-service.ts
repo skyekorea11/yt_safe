@@ -162,8 +162,8 @@ export const summaryService = {
       await this.fetchSummarizeTechSummary(videoId)
     if (!external) return null
 
-    const formatted = formatSummaryText(external, 3)
-    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 3) || formatted
+    const formatted = formatSummaryText(external, 5)
+    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 5) || formatted
     if (!ensured) return null
     if (this.isLowQualityExternalSummary(ensured)) return null
     if (!this.isRelevantToVideo(ensured, title, description)) {
@@ -339,8 +339,8 @@ export const summaryService = {
     }
 
     const fallbackText = summary || sourceText || '요약을 생성할 수 없습니다'
-    const formatted = formatSummaryText(fallbackText, 3)
-    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 3) || formatted
+    const formatted = formatSummaryText(fallbackText, 5)
+    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 5) || formatted
 
     await videoRepository.updateSummary(
       videoId,
@@ -398,7 +398,7 @@ export const summaryService = {
             const mergedChunkSummary = chunkSummaries.join('\n')
             summary = await summarizer.summarize(mergedChunkSummary, 220)
             if (!summary) {
-              summary = formatSummaryText(mergedChunkSummary, 3)
+              summary = formatSummaryText(mergedChunkSummary, 5)
             }
           } else {
             summary = await summarizer.summarize(cleanedTranscript, 200)
@@ -413,18 +413,18 @@ export const summaryService = {
         summary = await new HeuristicTranscriptSummarizer().summarize(cleanedTranscript, 200)
       }
 
-      const heuristicSummary = formatSummaryText(buildHeuristicSummary(cleanedTranscript, 3), 3)
+      const heuristicSummary = formatSummaryText(buildHeuristicSummary(cleanedTranscript, 5), 5)
       const formattedSummaryRaw = summary
-        ? formatSummaryText(summary, 3)
+        ? formatSummaryText(summary, 5)
         : heuristicSummary
       const robustSummaryRaw =
         formattedSummaryRaw.split('\n').filter(Boolean).length >= 2
           ? formattedSummaryRaw
-          : formatSummaryText(`${formattedSummaryRaw}\n${heuristicSummary}`, 3)
+          : formatSummaryText(`${formattedSummaryRaw}\n${heuristicSummary}`, 5)
       const formattedSummary = ensureKoreanSummary(
         robustSummaryRaw,
         `${contextVideo?.title || ''} ${contextVideo?.description || ''} ${cleanedTranscript.slice(0, 500)}`,
-        3
+        5
       )
 
       if (formattedSummary) {
@@ -436,7 +436,7 @@ export const summaryService = {
         const fallbackFromDescription = ensureKoreanSummary(
           fallbackFromDescriptionRaw,
           `${contextVideo?.title || ''} ${contextVideo?.description || ''}`,
-          3
+          5
         )
 
         if (fallbackFromDescription) {

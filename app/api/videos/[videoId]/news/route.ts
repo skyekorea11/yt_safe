@@ -1091,7 +1091,7 @@ const CARTEL_TERMS = ['담합', '카르텔', '공정위', '공정거래위원회
 const FOOD_CARTEL_TERMS = ['식품', '밀가루', '설탕', '포도당', '전분당']
 const HOUSING_MIGRATION_TERMS = [
   '부동산', '주택', '아파트', '전세', '월세', '청약', '분양', '재건축', '재개발',
-  '이사', '인서울', '탈서울', '경기도', '수도권', '주거이동', '주택공급',
+  '이사', '인서울', '탈서울', '경기도', '수도권', '주거이동', '주택공급', '임장', '집값', '매매',
 ]
 
 function normalizeTerm(term: string): string {
@@ -1439,8 +1439,19 @@ export async function GET(
       })
     }
 
-    // 중복 없는 쿼리 후보 — 짧고 구체적인 순서로
+    const titleBasisTerms = dedupeTerms(
+      extractKeywords(titleText, 8).filter((term) => !isWeakRelevanceTerm(term)),
+      8
+    )
+    const summaryBasisTerms = dedupeTerms(
+      extractKeywords(summaryText, 8).filter((term) => !isWeakRelevanceTerm(term)),
+      8
+    )
+
+    // 중복 없는 쿼리 후보 — 제목+요약 결합 우선, 이후 단독 후보
     const querySet = new Set<string>()
+    const titleSummaryCombined = [...new Set([...titleBasisTerms.slice(0, 3), ...summaryBasisTerms.slice(0, 3)])].join(' ')
+    if (titleSummaryCombined) querySet.add(titleSummaryCombined) // 1순위: 제목+요약 결합
     if (titleText) querySet.add(titleText.slice(0, 80))  // 1순위: 제목 (80자 이하)
     if (titleKeywords.length > 0) querySet.add(titleKeywords.join(' '))  // 2순위: 제목 키워드
     const taxonomyContext = await taxonomyContextPromise
@@ -1605,13 +1616,26 @@ export async function GET(
         const anchorScore = strongAnchorTerms.filter((term) =>
           normalizedTitle.includes(normalizeTerm(term))
         ).length
-        return { ...a, _score: score, _anchorScore: anchorScore }
+        const titleBasisScore = titleBasisTerms.filter((term) =>
+          normalizedTitle.includes(normalizeTerm(term))
+        ).length
+        const summaryBasisScore = summaryBasisTerms.filter((term) =>
+          normalizedTitle.includes(normalizeTerm(term))
+        ).length
+        return { ...a, _score: score, _anchorScore: anchorScore, _titleBasisScore: titleBasisScore, _summaryBasisScore: summaryBasisScore }
       })
       .sort((a, b) => b._score - a._score)
 
     const minAnchorScore = isHousingMigrationTopic ? 0 : (channelNewsMode === 'strict' ? 2 : 1)
     let relevant = scored.filter((a) => {
       if (a._score < minScore) return false
+      if (titleBasisTerms.length > 0 && summaryBasisTerms.length > 0) {
+        if (a._titleBasisScore < 1 && a._summaryBasisScore < 1) return false
+      } else if (titleBasisTerms.length > 0 && a._titleBasisScore < 1) {
+        return false
+      } else if (summaryBasisTerms.length > 0 && a._summaryBasisScore < 1) {
+        return false
+      }
       if (isCartelTopic || isHousingMigrationTopic) return true
       if (strongAnchorTerms.length === 0) return true
       return a._anchorScore >= minAnchorScore
@@ -1636,13 +1660,21 @@ export async function GET(
       // 주거이동 토픽은 매체별 표현 편차가 커서 점수 0~1 기사도 상위 일부 허용
       relevant = scored.filter((a) => a._score >= 1).slice(0, 8)
     }
+    if (!isCartelTopic && !isHousingMigrationTopic && relevant.length === 0 && scored.length > 0) {
+      // 일반 토픽에서 과도한 필터로 0건이 되는 경우, 제목/요약 기반 최소 매칭 기사 일부 허용
+      relevant = scored
+        .filter((a) => a._score >= 1 && (a._titleBasisScore >= 1 || a._summaryBasisScore >= 1))
+        .slice(0, 6)
+    }
     articles = shouldSuppressNewsByChannel
       ? []
       : relevant
       .slice(0, 8)
-      .map(({ _score, _anchorScore, ...a }) => {
+      .map(({ _score, _anchorScore, _titleBasisScore, _summaryBasisScore, ...a }) => {
         void _score
         void _anchorScore
+        void _titleBasisScore
+        void _summaryBasisScore
         return a
       })
 

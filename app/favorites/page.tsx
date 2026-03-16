@@ -21,27 +21,7 @@ interface RelatedNewsItem {
   publishedAt: string | null
 }
 
-interface StockSuggestion {
-  ticker: string
-  name: string
-  market: 'KOSPI' | 'KOSDAQ' | 'NYSE' | 'NASDAQ' | 'HKEX' | 'TSE' | 'TWSE'
-  is_core?: boolean
-}
-
-type TabKey = 'all' | 'uncategorized' | string
-
-function marketBadgeClass(market: string) {
-  if (market === 'KOSPI') return 'bg-blue-50 text-blue-600'
-  if (market === 'KOSDAQ') return 'bg-green-50 text-green-600'
-  if (market === 'NASDAQ') return 'bg-orange-50 text-orange-600'
-  return 'bg-purple-50 text-purple-600'
-}
-
-function stockHref(stock: StockSuggestion) {
-  return stock.market === 'KOSPI' || stock.market === 'KOSDAQ'
-    ? `https://finance.naver.com/item/main.naver?code=${stock.ticker}`
-    : `https://finance.yahoo.com/quote/${stock.ticker}`
-}
+type TabKey = 'all' | string
 
 function formatDate(value: string) {
   const d = new Date(value)
@@ -55,12 +35,14 @@ export default function FavoritesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
-  const [selectedTicker, setSelectedTicker] = useState<TabKey>('all')
-  const [showAllStockTabs, setShowAllStockTabs] = useState(false)
-  const [stockSearchInput, setStockSearchInput] = useState('')
+  const [selectedChannelTab, setSelectedChannelTab] = useState<TabKey>('all')
+  const [showAllChannelTabs, setShowAllChannelTabs] = useState(false)
+  const [channelSearchInput, setChannelSearchInput] = useState('')
+  const [isChannelTabOverflow, setIsChannelTabOverflow] = useState(false)
   const [notesByVideoId, setNotesByVideoId] = useState<Record<string, string>>({})
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
   const [editingNoteText, setEditingNoteText] = useState('')
+  const [isNoteEditMode, setIsNoteEditMode] = useState(false)
   const [isNoteSaving, setIsNoteSaving] = useState(false)
 
   const [refreshStatus, setRefreshStatus] = useState<RefreshStatus>({
@@ -69,12 +51,11 @@ export default function FavoritesPage() {
     newVideoCount: 0,
   })
   const [newsByVideoId, setNewsByVideoId] = useState<Record<string, RelatedNewsItem[]>>({})
-  const [stocksByVideoId, setStocksByVideoId] = useState<Record<string, StockSuggestion[]>>({})
   const [newsCacheKeyByVideoId, setNewsCacheKeyByVideoId] = useState<Record<string, string>>({})
   const [newsLoadingByVideoId, setNewsLoadingByVideoId] = useState<Record<string, boolean>>({})
-  const [stocksLoadingByVideoId, setStocksLoadingByVideoId] = useState<Record<string, boolean>>({})
 
   const prevLastRefreshed = useRef<string | null>(null)
+  const channelTabWrapRef = useRef<HTMLDivElement | null>(null)
   const channelTitleById = useMemo(
     () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.title])),
     [channels]
@@ -134,18 +115,14 @@ export default function FavoritesPage() {
 
         // Initialize news/stocks from DB cache
         const newsInit: Record<string, RelatedNewsItem[]> = {}
-        const stocksInit: Record<string, StockSuggestion[]> = {}
         const cacheKeyInit: Record<string, string> = {}
         for (const v of validVideosData) {
           if (Array.isArray(v.related_news) && v.related_news.length > 0) {
             newsInit[v.youtube_video_id] = v.related_news as RelatedNewsItem[]
             cacheKeyInit[v.youtube_video_id] = `${v.summary_text || ''}|${v.title || ''}`
           }
-          if (Array.isArray(v.related_stocks) && v.related_stocks.length > 0)
-            stocksInit[v.youtube_video_id] = v.related_stocks as StockSuggestion[]
         }
         setNewsByVideoId(newsInit)
-        setStocksByVideoId(stocksInit)
         setNewsCacheKeyByVideoId(cacheKeyInit)
         // Notes are loaded lazily for selected video only.
         setNotesByVideoId({})
@@ -167,16 +144,13 @@ export default function FavoritesPage() {
   const loadRelatedNews = async (
     videoId: string,
     cacheKey: string,
-    refreshTarget: 'news' | 'stocks' | null = null
+    refreshTarget: 'news' | null = null
   ) => {
     if (!refreshTarget && newsCacheKeyByVideoId[videoId] === cacheKey) return
-    if (refreshTarget === 'stocks') {
-      setStocksLoadingByVideoId(prev => ({ ...prev, [videoId]: true }))
-    } else if (refreshTarget === 'news') {
+    if (refreshTarget === 'news') {
       setNewsLoadingByVideoId(prev => ({ ...prev, [videoId]: true }))
     } else {
       setNewsLoadingByVideoId(prev => ({ ...prev, [videoId]: true }))
-      setStocksLoadingByVideoId(prev => ({ ...prev, [videoId]: true }))
     }
     try {
       const url = refreshTarget
@@ -185,16 +159,12 @@ export default function FavoritesPage() {
       const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
-      if (refreshTarget !== 'stocks')
-        setNewsByVideoId(prev => ({ ...prev, [videoId]: Array.isArray(data?.articles) ? data.articles : [] }))
-      if (refreshTarget !== 'news')
-        setStocksByVideoId(prev => ({ ...prev, [videoId]: Array.isArray(data?.stocks) ? data.stocks : [] }))
+      setNewsByVideoId(prev => ({ ...prev, [videoId]: Array.isArray(data?.articles) ? data.articles : [] }))
       setNewsCacheKeyByVideoId(prev => ({ ...prev, [videoId]: cacheKey }))
     } catch (error) {
       console.error(error)
     } finally {
       setNewsLoadingByVideoId(prev => ({ ...prev, [videoId]: false }))
-      setStocksLoadingByVideoId(prev => ({ ...prev, [videoId]: false }))
     }
   }
 
@@ -267,6 +237,7 @@ export default function FavoritesPage() {
   useEffect(() => {
     if (!selectedVideoId) {
       setEditingNoteText('')
+      setIsNoteEditMode(false)
       return
     }
 
@@ -287,6 +258,7 @@ export default function FavoritesPage() {
         return { ...prev, [selectedVideoId]: resolved }
       })
       setEditingNoteText(resolved)
+      setIsNoteEditMode(false)
     })()
 
     return () => {
@@ -294,51 +266,59 @@ export default function FavoritesPage() {
     }
   }, [selectedVideoId, notesByVideoId])
 
-  // Build stock → videos map (many-to-many: one video can appear under multiple stocks)
-  const stockVideoMap = useMemo(() => {
-    const map = new Map<string, { stock: StockSuggestion; videos: Video[] }>()
+  const channelVideoMap = useMemo(() => {
+    const map = new Map<string, { channelTitle: string; videos: Video[] }>()
     for (const video of favoriteVideos) {
-      for (const stock of (stocksByVideoId[video.youtube_video_id] || [])) {
-        if (!map.has(stock.ticker)) map.set(stock.ticker, { stock, videos: [] })
-        map.get(stock.ticker)!.videos.push(video)
+      const channelId = video.youtube_channel_id || 'unknown'
+      if (!map.has(channelId)) {
+        map.set(channelId, {
+          channelTitle: getChannelDisplayName(video),
+          videos: [],
+        })
       }
+      map.get(channelId)!.videos.push(video)
     }
     return map
-  }, [favoriteVideos, stocksByVideoId])
+  }, [favoriteVideos, channelTitleById])
 
-  const ungroupedVideos = useMemo(() =>
-    favoriteVideos.filter(v => (stocksByVideoId[v.youtube_video_id] || []).length === 0),
-    [favoriteVideos, stocksByVideoId]
-  )
-
-  const sortedTickers = useMemo(() =>
-    [...stockVideoMap.entries()]
+  const sortedChannelIds = useMemo(() =>
+    [...channelVideoMap.entries()]
       .sort((a, b) => b[1].videos.length - a[1].videos.length)
-      .map(([ticker]) => ticker),
-    [stockVideoMap]
+      .map(([channelId]) => channelId),
+    [channelVideoMap]
   )
 
   const selectedVideo = useMemo(
     () => favoriteVideos.find(v => v.youtube_video_id === selectedVideoId) || null,
     [favoriteVideos, selectedVideoId]
   )
-  const featuredTickers = useMemo(() => sortedTickers.slice(0, 8), [sortedTickers])
-  const hiddenTickers = useMemo(() => sortedTickers.slice(8), [sortedTickers])
-  const selectedTickerIsHidden =
-    typeof selectedTicker === 'string' &&
-    selectedTicker !== 'all' &&
-    selectedTicker !== 'uncategorized' &&
-    hiddenTickers.includes(selectedTicker)
+
 
   useEffect(() => {
-    if (selectedTicker === 'all' || selectedTicker === 'uncategorized') {
-      setStockSearchInput('')
+    if (selectedChannelTab === 'all') {
+      setChannelSearchInput('')
       return
     }
-    const entry = stockVideoMap.get(selectedTicker)
+    const entry = channelVideoMap.get(selectedChannelTab)
     if (!entry) return
-    setStockSearchInput(`${entry.stock.name} (${selectedTicker})`)
-  }, [selectedTicker, stockVideoMap])
+    setChannelSearchInput(entry.channelTitle)
+  }, [selectedChannelTab, channelVideoMap])
+
+  useEffect(() => {
+    const el = channelTabWrapRef.current
+    if (!el) return
+    const checkOverflow = () => {
+      // collapsed max height equals about two lines of pills
+      setIsChannelTabOverflow(el.scrollHeight > 84)
+    }
+    checkOverflow()
+    const id = setTimeout(checkOverflow, 0)
+    window.addEventListener('resize', checkOverflow)
+    return () => {
+      clearTimeout(id)
+      window.removeEventListener('resize', checkOverflow)
+    }
+  }, [sortedChannelIds, showAllChannelTabs, selectedChannelTab])
 
   const shellProps = {
     channels,
@@ -352,12 +332,11 @@ export default function FavoritesPage() {
   }
 
   const renderVideoCard = (video: Video) => {
-    const stocks = stocksByVideoId[video.youtube_video_id] || []
     const articles = newsByVideoId[video.youtube_video_id] || []
     const isNewsLoading = newsLoadingByVideoId[video.youtube_video_id]
-    const isStocksLoading = stocksLoadingByVideoId[video.youtube_video_id]
     const isFav = favoriteIds.has(video.youtube_video_id)
     const isSelected = selectedVideoId === video.youtube_video_id
+    const hasNote = (notesByVideoId[video.youtube_video_id] || '').trim().length > 0
     const newsCacheKey = `${video.summary_text || ''}|${video.title || ''}`
 
     return (
@@ -404,30 +383,6 @@ export default function FavoritesPage() {
             <p className={`mt-0.5 text-xs ${isSelected ? 'text-slate-700' : 'text-gray-500'}`}>
               {getChannelDisplayName(video)} · {formatDate(video.published_at)}
             </p>
-            {stocks.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {stocks.map(s => (
-                  <a
-                    key={s.ticker}
-                    href={stockHref(s)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded hover:opacity-75 transition-opacity ${
-                      s.is_core
-                        ? 'text-amber-700'
-                        : marketBadgeClass(s.market)
-                    }`}
-                  >
-                    {s.is_core ? (
-                      <span className="inline-flex items-center gap-0.5">
-                        <span className="text-[13px] leading-none text-amber-600 dark:text-amber-300">✨</span>
-                        <span>{s.name}</span>
-                      </span>
-                    ) : s.name}
-                  </a>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -444,18 +399,28 @@ export default function FavoritesPage() {
         ) : articles.length > 0 ? (
           <div className="space-y-1">
             {articles.slice(0, 2).map((a, i) => (
-              <a
+              <div
                 key={`${a.link}-${i}`}
-                href={a.link}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-start gap-1.5 group"
+                className="flex items-start justify-between gap-1.5 rounded-md px-1.5 py-1 hover:bg-slate-50"
               >
-                <Newspaper size={11} className="mt-0.5 text-gray-300 flex-shrink-0" />
-                <span className="ui-text-meta text-gray-600 group-hover:text-gray-900 line-clamp-1 transition-colors">
-                  {a.title}
-                </span>
-              </a>
+                <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                  <Newspaper size={11} className="mt-0.5 text-gray-300 flex-shrink-0" />
+                  <span className="ui-text-meta text-gray-600 line-clamp-1">
+                    {a.title}
+                  </span>
+                </div>
+                <a
+                  href={a.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-1 rounded-md text-gray-400 hover:bg-slate-100 hover:text-gray-700 transition-colors"
+                  title="기사 열기"
+                  aria-label="기사 열기"
+                >
+                  <ExternalLink size={12} />
+                </a>
+              </div>
             ))}
           </div>
         ) : null}
@@ -490,74 +455,25 @@ export default function FavoritesPage() {
               <RefreshCw size={13} />
             </button>
           )}
-          <button
-            onClick={() => void loadRelatedNews(video.youtube_video_id, newsCacheKey, 'stocks')}
-            className="ui-btn-ghost-icon"
-            title="관련 종목 새로고침"
-            aria-label="관련 종목 새로고침"
-          >
-            <RefreshCw size={13} className={isStocksLoading ? 'animate-spin' : ''} />
-          </button>
-          <span className="ml-auto text-[11px] text-amber-700 font-semibold">
-            {isSelected ? '선택됨' : '클릭해서 메모'}
+          <span className={`ml-auto inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            isSelected
+              ? (isNoteEditMode ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')
+              : (hasNote ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600')
+          }`}>
+            {isSelected
+              ? (isNoteEditMode ? '메모 수정' : '메모 보기')
+              : (hasNote ? '메모 보기' : '메모 수정')}
           </span>
         </div>
 
-        {isSelected && (
-          <div
-            className="xl:hidden mt-2 border-t border-gray-200 pt-3 space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="rounded-xl border border-gray-200 overflow-hidden bg-black">
-              <iframe
-                src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
-                className="w-full aspect-video"
-                allowFullScreen
-              />
-            </div>
-            <a
-              href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="ui-btn ui-btn-sm"
-            >
-              <ExternalLink size={12} />
-              유튜브에서 열기
-            </a>
-            <textarea
-              value={editingNoteText}
-              onChange={(e) => setEditingNoteText(e.target.value)}
-              placeholder="선택한 영상의 메모를 작성하세요..."
-            className="w-full min-h-[160px] resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
-            />
-            <button
-              onClick={handleSaveNote}
-              disabled={isNoteSaving}
-              className="tone-primary-btn ui-btn w-full disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isNoteSaving ? '저장 중...' : '메모 저장'}
-            </button>
-          </div>
-        )}
       </div>
     )
   }
 
-  const renderStockGroup = (ticker: string, stock: StockSuggestion, videos: Video[]) => (
-    <div key={ticker} className="space-y-3">
+  const renderChannelGroup = (channelId: string, channelTitle: string, videos: Video[]) => (
+    <div key={channelId} className="space-y-3">
       <div className="flex items-center gap-2">
-        <a
-          href={stockHref(stock)}
-          target="_blank"
-          rel="noreferrer"
-          className="font-bold text-gray-900 hover:underline"
-        >
-          {stock.name}
-        </a>
-        <span className="text-sm text-gray-400">{ticker}</span>
-        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${marketBadgeClass(stock.market)}`}>
-          {stock.market}
-        </span>
+        <span className="font-bold text-gray-900">{channelTitle}</span>
         <span className="text-xs text-gray-400 ml-auto">· {videos.length}개 영상</span>
       </div>
       <div className="space-y-3">
@@ -567,13 +483,9 @@ export default function FavoritesPage() {
   )
 
   // Determine what to show based on selected tab
-  const groupsToShow = selectedTicker === 'all'
-    ? sortedTickers
-    : selectedTicker === 'uncategorized'
-    ? []
-    : sortedTickers.filter(t => t === selectedTicker)
-
-  const showUngrouped = selectedTicker === 'all' || selectedTicker === 'uncategorized'
+  const groupsToShow = selectedChannelTab === 'all'
+    ? sortedChannelIds
+    : sortedChannelIds.filter(channelId => channelId === selectedChannelTab)
 
   return (
     <AppShell {...shellProps}>
@@ -596,167 +508,213 @@ export default function FavoritesPage() {
           {/* Compact tab bar */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedTicker('all')}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  selectedTicker === 'all'
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              <div
+                ref={channelTabWrapRef}
+                className={`flex-1 flex flex-wrap items-center gap-1.5 overflow-hidden ${
+                  showAllChannelTabs ? '' : 'max-h-[84px]'
                 }`}
               >
-                전체 {favoriteVideos.length}
-              </button>
-              {ungroupedVideos.length > 0 && (
                 <button
-                  onClick={() => setSelectedTicker('uncategorized')}
+                  onClick={() => setSelectedChannelTab('all')}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    selectedTicker === 'uncategorized'
+                    selectedChannelTab === 'all'
                       ? 'bg-slate-800 text-white'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  미분류 {ungroupedVideos.length}
+                  전체 {favoriteVideos.length}
                 </button>
-              )}
-              <div className="ml-auto">
+                {sortedChannelIds.map((channelId) => {
+                  const entry = channelVideoMap.get(channelId)!
+                  return (
+                    <button
+                      key={channelId}
+                      onClick={() => setSelectedChannelTab(channelId)}
+                      className={`flex-shrink-0 max-w-[220px] px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                        selectedChannelTab === channelId
+                          ? 'bg-slate-800 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                      title={entry.channelTitle}
+                    >
+                      <span className="line-clamp-2 break-words leading-snug">{entry.channelTitle}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {isChannelTabOverflow ? (
+                <button
+                  onClick={() => setShowAllChannelTabs((prev) => !prev)}
+                  className="ui-btn flex-shrink-0 rounded-full"
+                >
+                  {showAllChannelTabs ? '접기' : '더보기'}
+                </button>
+              ) : null}
+              <div className="ml-auto xl:hidden">
                 <input
-                  list="favorite-stock-options"
-                  value={stockSearchInput}
+                  list="favorite-channel-options"
+                  value={channelSearchInput}
                   onChange={(e) => {
                     const value = e.target.value
-                    setStockSearchInput(value)
+                    setChannelSearchInput(value)
                     const normalized = value.toLowerCase().trim()
                     if (!normalized) return
-                    for (const ticker of sortedTickers) {
-                      const entry = stockVideoMap.get(ticker)
+                    for (const channelId of sortedChannelIds) {
+                      const entry = channelVideoMap.get(channelId)
                       if (!entry) continue
-                      const optionLabel = `${entry.stock.name} (${ticker})`
+                      const optionLabel = entry.channelTitle
                       if (
                         optionLabel.toLowerCase() === normalized ||
-                        ticker.toLowerCase() === normalized ||
-                        entry.stock.name.toLowerCase() === normalized
+                        channelId.toLowerCase() === normalized
                       ) {
-                        setSelectedTicker(ticker)
+                        setSelectedChannelTab(channelId)
                         return
                       }
                     }
                   }}
                   onKeyDown={(e) => {
                     if (e.key !== 'Enter') return
-                    const normalized = stockSearchInput.toLowerCase().trim()
+                    const normalized = channelSearchInput.toLowerCase().trim()
                     if (!normalized) return
-                    const match = sortedTickers.find((ticker) => {
-                      const entry = stockVideoMap.get(ticker)
+                    const match = sortedChannelIds.find((channelId) => {
+                      const entry = channelVideoMap.get(channelId)
                       if (!entry) return false
-                      const optionLabel = `${entry.stock.name} (${ticker})`.toLowerCase()
+                      const optionLabel = entry.channelTitle.toLowerCase()
                       return (
                         optionLabel.includes(normalized) ||
-                        ticker.toLowerCase().includes(normalized) ||
-                        entry.stock.name.toLowerCase().includes(normalized)
+                        channelId.toLowerCase().includes(normalized)
                       )
                     })
-                    if (match) setSelectedTicker(match)
+                    if (match) setSelectedChannelTab(match)
                   }}
-                  placeholder="종목 검색"
+                  placeholder="채널 검색"
                   className="h-9 w-52 rounded-lg border border-slate-300 px-2.5 ui-text-body text-slate-700 bg-slate-50"
                 />
-                <datalist id="favorite-stock-options">
-                  {sortedTickers.map((ticker) => {
-                    const entry = stockVideoMap.get(ticker)!
-                    return (
-                      <option key={ticker} value={`${entry.stock.name} (${ticker})`}>
-                        {entry.stock.name} ({entry.videos.length})
-                      </option>
-                    )
-                  })}
-                </datalist>
               </div>
             </div>
-
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {featuredTickers.map((ticker) => {
-                const entry = stockVideoMap.get(ticker)!
-                return (
-                  <button
-                    key={ticker}
-                    onClick={() => setSelectedTicker(ticker)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      selectedTicker === ticker
-                        ? 'bg-slate-800 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {entry.stock.name} {entry.videos.length}
-                  </button>
-                )
-              })}
-              {selectedTickerIsHidden && (
-                <button
-                  onClick={() => setShowAllStockTabs(true)}
-                  className="ui-btn flex-shrink-0 bg-slate-800 text-white border-slate-800"
-                >
-                  {stockVideoMap.get(selectedTicker as string)?.stock.name || selectedTicker}
-                </button>
-              )}
-              {hiddenTickers.length > 0 && (
-                <button
-                  onClick={() => setShowAllStockTabs((prev) => !prev)}
-                  className="ui-btn flex-shrink-0 rounded-full"
-                >
-                  {showAllStockTabs ? '접기' : `종목 더보기 ${hiddenTickers.length}`}
-                </button>
-              )}
-            </div>
-
-            {showAllStockTabs && hiddenTickers.length > 0 && (
-              <div className="rounded-xl border border-slate-300 bg-slate-50 p-2 flex flex-wrap gap-1.5">
-                {hiddenTickers.map((ticker) => {
-                  const entry = stockVideoMap.get(ticker)!
-                  return (
-                    <button
-                      key={ticker}
-                      onClick={() => setSelectedTicker(ticker)}
-                    className={`ui-btn ui-btn-sm rounded-full ${
-                        selectedTicker === ticker
-                          ? 'bg-slate-800 text-white'
-                          : ''
-                      }`}
-                    >
-                      {entry.stock.name} {entry.videos.length}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
           {/* Content */}
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,760px)_320px] gap-5 items-start">
             <div className="space-y-8 xl:max-w-[760px]">
-              {groupsToShow.map(ticker => {
-                const entry = stockVideoMap.get(ticker)!
-                return renderStockGroup(ticker, entry.stock, entry.videos)
+              {groupsToShow.map(channelId => {
+                const entry = channelVideoMap.get(channelId)!
+                return renderChannelGroup(channelId, entry.channelTitle, entry.videos)
               })}
-              {showUngrouped && ungroupedVideos.length > 0 && (
-                <div className="space-y-3">
-                  {selectedTicker === 'all' && sortedTickers.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-400">미분류</span>
-                      <span className="text-xs text-gray-400 ml-auto">· {ungroupedVideos.length}개 영상</span>
+              <div className="xl:hidden border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4">
+                <h2 className="ui-title-sm text-gray-900">영상 보기 · 메모</h2>
+                {selectedVideo ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="px-1">
+                      <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
+                      <p className="mt-1 ui-title-md text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                     </div>
-                  )}
-                  <div className="space-y-3">
-                    {ungroupedVideos.map(v => renderVideoCard(v))}
+                    <div className="rounded-xl border border-slate-200 overflow-hidden bg-black">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${selectedVideo.youtube_video_id}`}
+                        className="w-full aspect-video"
+                        allowFullScreen
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center rounded-lg bg-slate-100 p-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsNoteEditMode(false)}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                              !isNoteEditMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                            }`}
+                          >
+                            메모 보기
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsNoteEditMode(true)}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                              isNoteEditMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                            }`}
+                          >
+                            메모 수정
+                          </button>
+                        </div>
+                        {isNoteEditMode ? (
+                          <button
+                            onClick={handleSaveNote}
+                            disabled={isNoteSaving}
+                            className="tone-primary-btn ui-btn ui-btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {isNoteSaving ? '저장 중...' : '저장'}
+                          </button>
+                        ) : null}
+                      </div>
+                      {!isNoteEditMode ? (
+                        <div className="w-full h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                          {editingNoteText?.trim() ? editingNoteText : '등록된 메모가 없습니다.'}
+                        </div>
+                      ) : (
+                        <textarea
+                          value={editingNoteText}
+                          onChange={(e) => setEditingNoteText(e.target.value)}
+                          placeholder="선택한 영상의 메모를 작성하세요..."
+                          className="w-full h-40 resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="mt-2 text-sm text-gray-400">리스트에서 영상을 선택하면 메모 보기를 확인할 수 있습니다.</p>
+                )}
+              </div>
             </div>
 
-            <aside className="hidden xl:block border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4 xl:sticky xl:top-24">
+            <aside className="hidden xl:block xl:sticky xl:top-24 space-y-3">
+              <div className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4">
+                <input
+                  list="favorite-channel-options"
+                  value={channelSearchInput}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setChannelSearchInput(value)
+                    const normalized = value.toLowerCase().trim()
+                    if (!normalized) return
+                    for (const channelId of sortedChannelIds) {
+                      const entry = channelVideoMap.get(channelId)
+                      if (!entry) continue
+                      const optionLabel = entry.channelTitle
+                      if (
+                        optionLabel.toLowerCase() === normalized ||
+                        channelId.toLowerCase() === normalized
+                      ) {
+                        setSelectedChannelTab(channelId)
+                        return
+                      }
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    const normalized = channelSearchInput.toLowerCase().trim()
+                    if (!normalized) return
+                    const match = sortedChannelIds.find((channelId) => {
+                      const entry = channelVideoMap.get(channelId)
+                      if (!entry) return false
+                      const optionLabel = entry.channelTitle.toLowerCase()
+                      return (
+                        optionLabel.includes(normalized) ||
+                        channelId.toLowerCase().includes(normalized)
+                      )
+                    })
+                    if (match) setSelectedChannelTab(match)
+                  }}
+                  placeholder="채널 검색"
+                  className="h-9 w-full rounded-lg border border-slate-300 px-2.5 ui-text-body text-slate-700 bg-slate-50"
+                />
+              </div>
+              <div className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4">
               <h2 className="ui-title-sm text-gray-900">영상 보기 · 메모</h2>
               {selectedVideo ? (
                 <div className="mt-3 space-y-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="px-1">
                     <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
                     <p className="mt-1 ui-title-md text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                   </div>
@@ -767,37 +725,71 @@ export default function FavoritesPage() {
                       allowFullScreen
                     />
                   </div>
-                  <a
-                    href={`https://youtube.com/watch?v=${selectedVideo.youtube_video_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ui-btn ui-btn-sm"
-                  >
-                    <ExternalLink size={12} />
-                    유튜브
-                  </a>
-                  <textarea
-                    value={editingNoteText}
-                    onChange={(e) => setEditingNoteText(e.target.value)}
-                    placeholder="선택한 영상의 메모를 작성하세요..."
-                    className="w-full min-h-[220px] resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
-                  />
-                  <button
-                    onClick={handleSaveNote}
-                    disabled={isNoteSaving}
-                    className="tone-primary-btn ui-btn w-full disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isNoteSaving ? '저장 중...' : '메모 저장'}
-                  </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="inline-flex items-center rounded-lg bg-slate-100 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsNoteEditMode(false)}
+                          className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                            !isNoteEditMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                          }`}
+                        >
+                          메모 보기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsNoteEditMode(true)}
+                          className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                            isNoteEditMode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
+                          }`}
+                        >
+                          메모 수정
+                        </button>
+                      </div>
+                      {isNoteEditMode ? (
+                        <button
+                          onClick={handleSaveNote}
+                          disabled={isNoteSaving}
+                          className="tone-primary-btn ui-btn ui-btn-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {isNoteSaving ? '저장 중...' : '저장'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {!isNoteEditMode ? (
+                      <div className="w-full min-h-[220px] rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                        {editingNoteText?.trim() ? editingNoteText : '등록된 메모가 없습니다.'}
+                      </div>
+                    ) : (
+                      <textarea
+                        value={editingNoteText}
+                        onChange={(e) => setEditingNoteText(e.target.value)}
+                        placeholder="선택한 영상의 메모를 작성하세요..."
+                        className="w-full min-h-[220px] resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
+                      />
+                    )}
+                  </div>
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-gray-400">리스트에서 영상을 선택하면 메모 폼이 열립니다.</p>
+                <p className="mt-2 text-sm text-gray-400">리스트에서 영상을 선택하면 메모 보기를 확인할 수 있습니다.</p>
               )}
+              </div>
             </aside>
           </div>
 
         </div>
       )}
+      <datalist id="favorite-channel-options">
+        {sortedChannelIds.map((channelId) => {
+          const entry = channelVideoMap.get(channelId)!
+          return (
+            <option key={channelId} value={entry.channelTitle}>
+              {entry.channelTitle} ({entry.videos.length})
+            </option>
+          )
+        })}
+      </datalist>
     </AppShell>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Heart, RefreshCw } from 'lucide-react'
+import { Heart, RefreshCw, ExternalLink } from 'lucide-react'
 import { Channel, Video } from '@/types'
 import { channelRepository } from '@/lib/supabase/channels'
 import { videoRepository, videoFavoriteRepository } from '@/lib/supabase/videos'
@@ -12,7 +12,6 @@ import { LoadingGridSkeleton } from '@/components/LoadingSkeleton'
 import { useVideoFilter, useSummaryPreferences } from '@/hooks/useVideo' 
 import { refreshAllChannelsAction, removeChannelAction, refreshVideoSummaryAction } from '@/actions/channel-actions'
 import { updateVideoFavoriteAction } from '@/actions/note-actions'
-import { isNewsFavorited, loadNewsFavorites, NewsFavoriteMap, toggleNewsFavorite } from '@/lib/news-favorites'
 import { isValidStoredVideo } from '@/lib/utils/video-validity'
 
 interface RefreshStatus {
@@ -69,7 +68,6 @@ export default function DashboardPage() {
   const [newsLoadingVideoId, setNewsLoadingVideoId] = useState<string | null>(null)
   const [stocksLoadingVideoId, setStocksLoadingVideoId] = useState<string | null>(null)
   const [newsErrorByVideoId, setNewsErrorByVideoId] = useState<Record<string, string>>({})
-  const [newsFavorites, setNewsFavorites] = useState<NewsFavoriteMap>({})
   const [domesticNewsItems, setDomesticNewsItems] = useState<NewsChannelItem[]>([])
   const [overseasNewsItems, setOverseasNewsItems] = useState<NewsChannelItem[]>([])
   const [newsPanelLoading, setNewsPanelLoading] = useState(false)
@@ -100,7 +98,6 @@ export default function DashboardPage() {
   )
 
   useEffect(() => { loadData() }, [])
-  useEffect(() => { setNewsFavorites(loadNewsFavorites()) }, [])
 
   // 60초마다 refresh 상태 폴링
   useEffect(() => {
@@ -153,50 +150,11 @@ export default function DashboardPage() {
     if (news === 'strict') return 'strict 모드로 필터링되어 관련 기사가 없습니다. 설정에서 auto로 바꿔보세요.'
     return '요약 기반으로 찾은 뉴스가 없습니다.'
   }
-  const getEmptyStocksMessage = (video: Video) => {
-    const { stock } = getChannelModes(video)
-    if (stock === 'off') return '관련 종목을 보려면 설정에서 관련주 모드를 auto로 바꿔주세요.'
-    if (stock === 'strict' || stock === 'low_stock') return 'strict 모드입니다. 관련 종목을 보려면 설정에서 auto로 바꿔주세요.'
-    return '관련 종목을 찾지 못했습니다.'
-  }
-
   const formatPublishedDate = (value: string | null) => {
     if (!value) return ''
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleDateString('ko-KR')
-  }
-
-  const formatTimeHHmm = (value: string) => {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-  }
-
-  const newsTimeBadgeClass = (position: number, total: number) => {
-    const palette = [
-      'bg-red-500 text-white',
-      'bg-red-600 text-white',
-      'bg-red-700 text-white',
-      'bg-red-800 text-white',
-      'bg-rose-900 text-white',
-      'bg-zinc-700 text-white',
-      'bg-zinc-800 text-white',
-      'bg-zinc-900 text-white',
-      'bg-neutral-900 text-white',
-      'bg-black text-white',
-    ]
-    if (total <= 1) return palette[0]
-    const mapped = Math.round((position / (total - 1)) * (palette.length - 1))
-    return palette[Math.min(Math.max(mapped, 0), palette.length - 1)]
-  }
-
-  const toggleArticleFavorite = (videoId: string, link: string) => {
-    setNewsFavorites(prev => toggleNewsFavorite(prev, videoId, link))
   }
 
   const loadRelatedNews = async (
@@ -558,26 +516,17 @@ export default function DashboardPage() {
                         href={article.link}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 min-w-0"
+                        className="flex-1 min-w-0 flex items-start justify-between gap-2"
                       >
-                      <p className="ui-title-md text-gray-900 line-clamp-2">{article.title}</p>
-                      <p className="mt-1 ui-text-meta text-gray-500">
-                          {article.source}
-                          {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <p className="ui-title-md text-gray-900 line-clamp-2">{article.title}</p>
+                          <p className="mt-1 ui-text-meta text-gray-500">
+                            {article.source}
+                            {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
+                          </p>
+                        </div>
+                        <ExternalLink size={13} className="text-gray-400 shrink-0 mt-0.5" />
                       </a>
-                      <button
-                        onClick={() => toggleArticleFavorite(video.youtube_video_id, article.link)}
-                        className="p-1 rounded-md hover:bg-slate-100 transition-colors"
-                        title="기사 좋아요"
-                      >
-                        <Heart
-                          size={14}
-                          className={isNewsFavorited(newsFavorites, video.youtube_video_id, article.link)
-                            ? 'text-red-400 fill-red-400'
-                            : 'text-gray-300'}
-                        />
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -588,67 +537,41 @@ export default function DashboardPage() {
 
         <div className="border border-slate-200 bg-white rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="ui-title-sm text-gray-800">관련 종목</h3>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => {
-                  const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
-                  void loadRelatedNews(video.youtube_video_id, cacheKey, 'stocks')
-                }}
-                className="ui-btn-ghost-icon"
-                title="관련 종목 새로고침"
-                aria-label="관련 종목 새로고침"
-              >
-                <RefreshCw size={14} />
-              </button>
-            </div>
+            <h3 className="ui-title-sm text-gray-800">관련 영상 추천</h3>
+            <button
+              onClick={() => void loadData()}
+              className="ui-btn-ghost-icon"
+              title="관련 영상 새로고침"
+              aria-label="관련 영상 새로고침"
+            >
+              <RefreshCw size={14} />
+            </button>
           </div>
-          <div>
-            {stocksLoadingVideoId === video.youtube_video_id ? (
-              <p className="ui-text-body text-gray-500 animate-pulse">분석 중...</p>
-            ) : (stocksByVideoId[video.youtube_video_id] || []).length === 0 ? (
-              <p className="ui-text-body text-gray-500">{getEmptyStocksMessage(video)}</p>
-            ) : (
-              <div className="space-y-2">
-                {(stocksByVideoId[video.youtube_video_id] || []).map((stock) => {
-                  const isKorean = stock.market === 'KOSPI' || stock.market === 'KOSDAQ'
-                  const href = isKorean
-                    ? `https://finance.naver.com/item/main.naver?code=${stock.ticker}`
-                    : `https://finance.yahoo.com/quote/${stock.ticker}`
-                  const marketBadge =
-                    stock.market === 'KOSPI' ? 'bg-blue-50 text-blue-600' :
-                    stock.market === 'KOSDAQ' ? 'bg-green-50 text-green-600' :
-                    stock.market === 'NASDAQ' ? 'bg-orange-50 text-orange-600' :
-                    'bg-purple-50 text-purple-600'
-                  return (
-                    <a
-                      key={stock.ticker}
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
-                        stock.is_core
-                          ? 'border-amber-300 hover:bg-amber-50/30'
-                          : 'border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        {stock.is_core && (
-                          <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[16px] leading-none text-amber-600 dark:text-amber-300">✨</span>
-                        )}
-                        <span className="ui-title-md text-gray-900 truncate">{stock.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-text-meta text-gray-500">{stock.ticker}</span>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${marketBadge}`}>
-                          {stock.market}
-                        </span>
-                      </div>
-                    </a>
-                  )
-                })}
-              </div>
-            )}
+          <div className="space-y-2">
+            {sortedVideos
+              .filter((candidate) =>
+                candidate.youtube_video_id !== video.youtube_video_id &&
+                candidate.youtube_channel_id === video.youtube_channel_id
+              )
+              .slice(0, 5)
+              .map((candidate) => (
+                <a
+                  key={candidate.youtube_video_id}
+                  href={`https://youtube.com/watch?v=${candidate.youtube_video_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                >
+                  <span className="ui-title-md text-gray-900 line-clamp-1 flex-1 min-w-0">{candidate.title}</span>
+                  <ExternalLink size={13} className="text-gray-400 shrink-0" />
+                </a>
+              ))}
+            {sortedVideos.filter((candidate) =>
+              candidate.youtube_video_id !== video.youtube_video_id &&
+              candidate.youtube_channel_id === video.youtube_channel_id
+            ).length === 0 ? (
+              <p className="ui-text-body text-gray-500">추천할 관련 영상이 없습니다.</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -799,9 +722,9 @@ export default function DashboardPage() {
           ) : (
             <div className="mt-3 space-y-4">
               <div>
-                <p className="mb-2 text-sm font-semibold text-gray-600">국내 최신 Top 10</p>
+                <p className="mb-2 text-sm font-semibold text-gray-600">🇰🇷 국내 최신 Top 10</p>
                 <div className="space-y-0.5">
-                  {domesticNewsItems.slice(0, 10).map((item, idx, arr) => (
+                  {domesticNewsItems.slice(0, 10).map((item, idx) => (
                     <a
                       key={`dom-${item.youtubeVideoId}-${idx}`}
                       href={item.videoUrl}
@@ -809,12 +732,7 @@ export default function DashboardPage() {
                       rel="noreferrer"
                       className="block rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className={`inline-flex w-10 justify-center px-1 py-0.5 rounded text-[10px] font-semibold tabular-nums leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
-                          {formatTimeHHmm(item.publishedAt)}
-                        </span>
-                        <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">{item.title}</p>
-                      </div>
+                      <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">• {item.title}</p>
                     </a>
                   ))}
                   {domesticNewsItems.length === 0 ? (
@@ -824,9 +742,9 @@ export default function DashboardPage() {
               </div>
 
               <div>
-                <p className="mb-2 text-sm font-semibold text-gray-600">해외 최신 Top 10</p>
+                <p className="mb-2 text-sm font-semibold text-gray-600">🌐 해외 최신 Top 10</p>
                 <div className="space-y-0.5">
-                  {overseasNewsItems.slice(0, 10).map((item, idx, arr) => (
+                  {overseasNewsItems.slice(0, 10).map((item, idx) => (
                     <a
                       key={`ovr-${item.youtubeVideoId}-${idx}`}
                       href={item.videoUrl}
@@ -834,12 +752,7 @@ export default function DashboardPage() {
                       rel="noreferrer"
                       className="block rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className={`inline-flex w-10 justify-center px-1 py-0.5 rounded text-[10px] font-semibold tabular-nums leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
-                          {formatTimeHHmm(item.publishedAt)}
-                        </span>
-                        <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">{item.title}</p>
-                      </div>
+                      <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">• {item.title}</p>
                     </a>
                   ))}
                   {overseasNewsItems.length === 0 ? (

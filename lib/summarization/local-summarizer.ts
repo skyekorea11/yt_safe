@@ -87,13 +87,13 @@ export class GeminiSummarizer implements LocalSummarizer {
     const systemInstruction = [
       '당신은 유튜브 영상 자막을 한국어로 요약하는 전문가입니다.',
       '다음 규칙을 반드시 따르십시오.',
-      '1. 완전한 서술형 문장 3개로 작성한다.',
+      '1. 완전한 서술형 문장 4~5개로 작성한다.',
       '2. 구어체, 반복 표현, 불필요한 세부 예시는 제거한다.',
       '3. 영상 전체의 핵심 메시지 중심으로 정리하며 도입/중반/결론을 균형 있게 반영한다.',
       '4. 객관적이고 간결한 문어체 문체를 사용한다.',
       '5. 번호, 불릿, 타임스탬프 없이 자연스러운 문단으로만 작성한다.',
       '6. 반드시 한국어로만 답한다.',
-      '7. 첫 문장은 주제와 문제의식을, 둘째 문장은 핵심 근거/데이터를, 셋째 문장은 결론/시사점을 담는다.',
+      '7. 첫 문장은 주제와 문제의식을, 중간 문장들은 핵심 근거/데이터를, 마지막 문장은 결론/시사점을 담는다.',
     ].join(' ')
 
     // Exponential backoff on 429: up to 3 attempts (delays: 8s, 16s)
@@ -245,7 +245,7 @@ export class HeuristicTranscriptSummarizer implements LocalSummarizer {
     if (!text || text.length === 0) return null
 
     const { buildHeuristicSummary } = await import('@/lib/utils/transcript')
-    const summary = buildHeuristicSummary(text, 3)
+    const summary = buildHeuristicSummary(text, 5)
     return summary || null
   }
 
