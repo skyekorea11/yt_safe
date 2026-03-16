@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const [videos, setVideos] = useState<Video[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([])
   const [visibleCount, setVisibleCount] = useState(20)
   const [isSummaryLoading, setIsSummaryLoading] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
@@ -378,13 +378,13 @@ export default function DashboardPage() {
   }
 
   const sortedVideos = useMemo(() => {
-    const base = selectedChannelId
-      ? filteredVideos.filter(v => v.youtube_channel_id === selectedChannelId)
+    const base = selectedChannelIds.length > 0
+      ? filteredVideos.filter(v => selectedChannelIds.includes(v.youtube_channel_id))
       : filteredVideos
     return [...base].sort(
       (a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
     )
-  }, [filteredVideos, selectedChannelId])
+  }, [filteredVideos, selectedChannelIds])
 
   const selectedVideo = useMemo(() =>
     sortedVideos.find(v => v.youtube_video_id === selectedVideoId) ?? null,
@@ -414,7 +414,11 @@ export default function DashboardPage() {
       await removeChannelAction(channelId)
       await loadData()
     },
-    onChannelSelected: (id: string) => setSelectedChannelId(id),
+    onChannelSelected: (id: string) => setSelectedChannelIds(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    ),
+    onChannelClearFilter: () => setSelectedChannelIds([]),
+    selectedChannelIds,
     newVideoCount:     refreshStatus?.newVideoCount ?? 0,
     onManualRefresh:   handleManualRefresh,
   }
@@ -458,7 +462,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-2.5">
-        <div className="border border-slate-200/80 bg-white/60 rounded-xl overflow-hidden">
+        <div className="border border-slate-200 bg-white rounded-xl overflow-hidden">
           <iframe
             src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
             className="w-full aspect-video"
@@ -466,7 +470,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="border border-slate-200/80 bg-white/60 rounded-xl p-4">
+        <div className="border border-slate-200 bg-white rounded-xl p-4">
           <h3 className="ui-title-sm text-gray-800 mb-2">영상 요약</h3>
           {video.transcript_status === 'not_available' ? (
             <p className="ui-text-body text-gray-500">아직 자막을 추출할 수 없습니다.</p>
@@ -513,7 +517,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="border border-slate-200/80 bg-white/60 rounded-xl p-4">
+        <div className="border border-slate-200 bg-white rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="ui-title-sm text-gray-800">관련 뉴스</h3>
             <div className="flex items-center gap-1.5">
@@ -542,7 +546,7 @@ export default function DashboardPage() {
                 {(newsByVideoId[video.youtube_video_id] || []).slice(0, 4).map((article, idx) => (
                   <div
                     key={`${article.link}-${idx}`}
-                    className="block rounded-lg border border-slate-200/70 px-3 py-2 hover:bg-slate-50 transition-colors"
+                    className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-start gap-2">
                       <a
@@ -577,7 +581,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="border border-slate-200/80 bg-white/60 rounded-xl p-4">
+        <div className="border border-slate-200 bg-white rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="ui-title-sm text-gray-800">관련 종목</h3>
             <div className="flex items-center gap-1.5">
@@ -620,7 +624,7 @@ export default function DashboardPage() {
                       className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
                         stock.is_core
                           ? 'border-amber-300 hover:bg-amber-50/30'
-                          : 'border-slate-200/70 hover:bg-slate-50'
+                          : 'border-slate-200 hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -659,7 +663,7 @@ export default function DashboardPage() {
 
         {/* ── 좌측: 영상 목록 ──────────────────────────────────────────── */}
         <div
-          className="border border-slate-200/80 rounded-2xl bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)] overflow-y-auto"
+          className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
           onScroll={(e) => {
             const el = e.currentTarget
@@ -750,7 +754,7 @@ export default function DashboardPage() {
 
         {/* ── 가운데: 영상 상세 ────────────────────────────────────────── */}
         <div
-          className="hidden xl:block border border-slate-200/80 rounded-2xl bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-5 overflow-y-auto"
+          className="hidden xl:block border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-5 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           {selectedVideo ? (
@@ -765,7 +769,7 @@ export default function DashboardPage() {
 
         {/* ── 우측: 뉴스 채널 최신 제목 ───────────────────────────────── */}
         <aside
-          className="border border-slate-200/80 rounded-2xl bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-3.5 xl:sticky xl:top-24 overflow-y-auto"
+          className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-3.5 xl:sticky xl:top-24 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           <div className="flex items-center justify-between gap-2">

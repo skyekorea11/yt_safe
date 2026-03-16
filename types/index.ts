@@ -32,7 +32,7 @@ export interface Video {
   transcript_text?: string;
   summary_status: 'pending' | 'processing' | 'complete' | 'failed' | null;
   summary_text?: string;
-  summary_source_type?: 'transcript' | 'description' | null;
+  summary_source_type?: 'transcript' | 'description' | 'external' | null;
   summarized_at?: string;
   related_news?: Array<{ title: string; link: string; source: string; publishedAt: string | null }> | null;
   related_stocks?: Array<{ ticker: string; name: string; market: 'KOSPI' | 'KOSDAQ' | 'NYSE' | 'NASDAQ' | 'HKEX' | 'TSE' | 'TWSE'; is_core?: boolean }> | null;

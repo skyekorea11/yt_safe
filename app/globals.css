@@ -132,7 +132,7 @@ html.dark .border-gray-100,
 html.dark .border-gray-200,
 html.dark .border-slate-200,
 html.dark .border-slate-300 {
-  border-color: #334155 !important;
+  border-color: #2a394d !important;
 }
 
 html.dark .text-gray-900,
@@ -192,13 +192,13 @@ html.beige {
 
 html.beige .bg-white,
 html.beige .bg-slate-50 {
-  background-color: #f2eadf !important;
+  background-color: #fffaf2 !important;
 }
 
 html.beige .bg-slate-100,
 html.beige .bg-slate-200,
 html.beige .bg-gray-100 {
-  background-color: #e8dccd !important;
+  background-color: #efe2d2 !important;
 }
 
 html.beige .border-gray-100,
@@ -210,14 +210,14 @@ html.beige .border-slate-300 {
 
 html.beige .text-gray-900,
 html.beige .text-slate-900 {
-  color: #4b3b2f !important;
+  color: #3f3025 !important;
 }
 
 html.beige .text-gray-800,
 html.beige .text-slate-800,
 html.beige .text-gray-700,
 html.beige .text-slate-700 {
-  color: #5a4738 !important;
+  color: #4a392c !important;
 }
 
 html.beige .text-gray-600,
@@ -268,7 +268,7 @@ html.dark.beige {
 
 html.dark.beige .bg-white,
 html.dark.beige .bg-slate-50 {
-  background-color: #2a211a !important;
+  background-color: #231b15 !important;
 }
 
 html.dark.beige .bg-slate-100,
@@ -281,14 +281,14 @@ html.dark.beige .border-gray-100,
 html.dark.beige .border-gray-200,
 html.dark.beige .border-slate-200,
 html.dark.beige .border-slate-300 {
-  border-color: #5a4a3b !important;
+  border-color: #4f4134 !important;
 }
 
 html.dark.beige .text-gray-900,
 html.dark.beige .text-slate-900,
 html.dark.beige .text-gray-800,
 html.dark.beige .text-slate-800 {
-  color: #eadfce !important;
+  color: #f0e4d4 !important;
 }
 
 html.dark.beige .text-gray-700,

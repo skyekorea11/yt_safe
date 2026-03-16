@@ -193,7 +193,7 @@ export async function refreshVideoSummaryAction(
   useTranscriptPipeline = true
 ): Promise<{
   success: boolean
-  summary?: { text: string; sourceType: 'transcript' | 'description' }
+  summary?: { text: string; sourceType: 'transcript' | 'description' | 'external' }
   video?: Video | null
   error?: string
 }> {
@@ -230,7 +230,7 @@ export async function getSummaryAction(
   useTranscriptPipeline = true
 ): Promise<{
   success: boolean
-  summary?: { text: string; sourceType: 'transcript' | 'description' }
+  summary?: { text: string; sourceType: 'transcript' | 'description' | 'external' }
   error?: string
 }> {
   try {

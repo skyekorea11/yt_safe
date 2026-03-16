@@ -267,6 +267,10 @@ const STOCK_KEYWORD_MAP: Array<{
   { keywords: ['러시아', '우크라이나', '돈바스', '푸틴', '전쟁', '군사긴장', '확전', '휴전협상'], ticker: '079550', name: 'LIG넥스원', market: 'KOSPI' },
   { keywords: ['러시아', '우크라이나', '돈바스', '푸틴', '나토', '군비', '군수'], ticker: '012450', name: '한화에어로스페이스', market: 'KOSPI' },
   { keywords: ['러시아', '우크라이나', '돈바스', '포탄', '탄약', '군사충돌'], ticker: '103140', name: '풍산', market: 'KOSPI' },
+  // 중국 로봇/공장 자동화
+  { keywords: ['중국로봇', '중국휴머노이드', '중국산업로봇', '유비테크', 'ubtech', '중국공장자동화'], ticker: '9880.HK', name: 'UBTECH Robotics', market: 'HKEX' },
+  { keywords: ['샤오미', 'xiaomi', '중국로봇생태계', '중국제조자동화'], ticker: '1810.HK', name: 'Xiaomi', market: 'HKEX' },
+  { keywords: ['비야디', 'byd', '중국공장', '중국자동화공장', '중국전기차공장'], ticker: '1211.HK', name: 'BYD', market: 'HKEX' },
   // 원전 / 에너지
   { keywords: ['원전', '원자력', '핵발전', 'smr', '소형원전', '두산에너빌리티'], ticker: '034020', name: '두산에너빌리티', market: 'KOSPI' },
   // 글로벌 빅테크 / AI
@@ -683,8 +687,12 @@ const SECTOR_RULES: Array<{
     keywords: [
       '로봇공학', '휴머노이드', '산업로봇', '자율로봇', '메카트로닉스',
       'robotics', 'robot', '자동화공학',
+      '중국로봇', '중국휴머노이드', '중국산업로봇', '중국공장', '중국제조업', 'china robot',
     ],
     stocks: [
+      { ticker: '9880.HK', name: 'UBTECH Robotics', market: 'HKEX' },
+      { ticker: '1810.HK', name: 'Xiaomi', market: 'HKEX' },
+      { ticker: '1211.HK', name: 'BYD', market: 'HKEX' },
       { ticker: 'TSLA', name: 'Tesla', market: 'NASDAQ' },
       { ticker: 'ABB', name: 'ABB', market: 'NYSE' },
       { ticker: 'ISRG', name: 'Intuitive Surgical', market: 'NASDAQ' },
@@ -934,14 +942,20 @@ function prioritizeCoreByTitle(stocks: StockSuggestion[], title: string): StockS
   const isGeopoliticsDefenseTopic =
     ['러시아', '우크라이나', '돈바스', '푸틴', '나토', '전쟁', '군사충돌', '확전']
       .some(kw => normalizedTitle.includes(kw))
+  const isChinaRobotTopic =
+    (['중국', 'china', '중국산'].some(kw => normalizedTitle.includes(kw))) &&
+    (['로봇', '휴머노이드', '산업로봇', '공장자동화', '자동화'].some(kw => normalizedTitle.includes(kw)))
 
-  if (!isOverseasMilkTeaTopic && !isFoodCartelTopic && !isStarlinkTelecomTopic && !isGeopoliticsDefenseTopic) return stocks
+  if (!isOverseasMilkTeaTopic && !isFoodCartelTopic && !isStarlinkTelecomTopic && !isGeopoliticsDefenseTopic && !isChinaRobotTopic) return stocks
 
   const foreignPriority = ['2150.HK', '9633.HK', '2587.T', '1216.TW', 'KO', 'PEP', 'SBUX']
   const foodCartelPriority = ['097950', '001130', '145990', '271560', '280360', '004370']
   const starlinkTelecomPriority = ['RKLB', 'ASTS', 'IRDM', 'VZ', 'T', 'TMUS', '017670', '030200']
   const geopoliticsDefensePriority = ['012450', '079550', '047810', '103140', 'LMT', 'RTX']
-  const priority = isGeopoliticsDefenseTopic
+  const chinaRobotPriority = ['9880.HK', '1810.HK', '1211.HK', '454910', '6954.T', 'ABB', 'TSLA']
+  const priority = isChinaRobotTopic
+    ? chinaRobotPriority
+    : isGeopoliticsDefenseTopic
     ? geopoliticsDefensePriority
     : isStarlinkTelecomTopic
     ? starlinkTelecomPriority
@@ -1030,7 +1044,7 @@ const WEAK_RELEVANCE_TERMS = new Set([
   '오늘', '이번', '최근', '최신', '화제', '이슈', '분석', '전망', '정리',
   '공개', '발표', '출시', '논란', '충격', '역사', '횡을', '한획', '기록',
   '주년', '7주년', '1주년', '2주년', '3주년', '5주년', '10주년',
-  '이유', '근황', '소식',
+  '이유', '근황', '소식', '모델',
 ])
 
 const NON_INVESTMENT_KEYWORDS = [
@@ -1071,6 +1085,30 @@ function dedupeTerms(terms: string[], max = 12): string[] {
     if (out.length >= max) break
   }
   return out
+}
+
+function extractEntityAnchorTerms(text: string, max = 8): string[] {
+  const normalized = text.toLowerCase().replace(/\s+/g, '')
+  const candidates: string[] = []
+  const seen = new Set<string>()
+
+  for (const entry of STOCK_KEYWORD_MAP) {
+    for (const kw of entry.keywords) {
+      const norm = normalizeTerm(kw)
+      if (!norm || norm.length < 2) continue
+      if (isWeakRelevanceTerm(norm)) continue
+      if (!normalized.includes(norm)) continue
+      if (seen.has(norm)) continue
+      seen.add(norm)
+      candidates.push(norm)
+      if (candidates.length >= max * 2) break
+    }
+    if (candidates.length >= max * 2) break
+  }
+
+  return candidates
+    .sort((a, b) => b.length - a.length)
+    .slice(0, max)
 }
 
 function shouldSkipFinancialEnrichment(title: string, summary: string): boolean {
@@ -1382,6 +1420,11 @@ export async function GET(
       if (mixed.trim()) querySet.add(mixed)
       querySet.add(summaryKeywords.join(' '))  // 4순위: 요약 키워드만
     }
+    const entityAnchors = extractEntityAnchorTerms(titleText, 6)
+    if (entityAnchors.length > 0) {
+      // 브랜드/기업명 앵커가 있으면 검색 후보에 우선 추가 (무관 기사 유입 감소)
+      querySet.add(entityAnchors.slice(0, 2).join(' '))
+    }
     const normalizedBase = `${titleText} ${summaryText}`.toLowerCase().replace(/\s+/g, '')
     const isCartelTopic = CARTEL_TERMS.some(kw => normalizedBase.includes(kw))
     const isFoodCartelTopic = isCartelTopic && FOOD_CARTEL_TERMS.some(kw => normalizedBase.includes(kw))
@@ -1491,6 +1534,7 @@ export async function GET(
           ].filter((term) => !isWeakRelevanceTerm(term)),
           10
         )
+    const entityAnchorTerms = isCartelTopic ? [] : dedupeTerms(extractEntityAnchorTerms(titleText, 6), 6)
 
     const minScoreBase = relevanceTerms.length >= 8 ? 2 : 1
     const minScore = channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase
@@ -1515,6 +1559,12 @@ export async function GET(
       if (strongAnchorTerms.length === 0) return true
       return a._anchorScore >= minAnchorScore
     })
+    if (!isCartelTopic && entityAnchorTerms.length > 0) {
+      relevant = relevant.filter((a) => {
+        const t = a.title.toLowerCase().replace(/\s+/g, '')
+        return entityAnchorTerms.some((term) => t.includes(term))
+      })
+    }
     if (isCartelTopic) {
       relevant = relevant.filter((a) => {
         const t = a.title.toLowerCase().replace(/\s+/g, '')

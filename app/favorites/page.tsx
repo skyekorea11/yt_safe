@@ -376,8 +376,8 @@ export default function FavoritesPage() {
             prev === video.youtube_video_id ? null : video.youtube_video_id
           )
         }
-        className={`border rounded-2xl bg-white/85 shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-3.5 space-y-3 transition-colors ${
-          isSelected ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200/80'
+        className={`border rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-3.5 space-y-3 transition-colors ${
+          isSelected ? 'border-amber-300 bg-amber-50/35' : 'border-slate-200'
         }`}
       >
 
@@ -461,7 +461,7 @@ export default function FavoritesPage() {
         ) : null}
 
         {/* Action row */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200">
           <a
             href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
             target="_blank"
@@ -528,7 +528,7 @@ export default function FavoritesPage() {
               value={editingNoteText}
               onChange={(e) => setEditingNoteText(e.target.value)}
               placeholder="선택한 영상의 메모를 작성하세요..."
-              className="w-full min-h-[160px] resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 leading-relaxed"
+            className="w-full min-h-[160px] resize-none rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
             />
             <button
               onClick={handleSaveNote}
@@ -752,15 +752,15 @@ export default function FavoritesPage() {
               )}
             </div>
 
-            <aside className="hidden xl:block border border-slate-200/80 rounded-2xl bg-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4 xl:sticky xl:top-24">
+            <aside className="hidden xl:block border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-4 xl:sticky xl:top-24">
               <h2 className="ui-title-sm text-gray-900">영상 보기 · 메모</h2>
               {selectedVideo ? (
                 <div className="mt-3 space-y-3">
-                  <div className="rounded-xl border border-slate-200/80 bg-white/60 p-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
                     <p className="mt-1 ui-title-md text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 overflow-hidden bg-black">
+                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-black">
                     <iframe
                       src={`https://www.youtube.com/embed/${selectedVideo.youtube_video_id}`}
                       className="w-full aspect-video"

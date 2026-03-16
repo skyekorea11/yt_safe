@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, LayoutDashboard, Heart, Settings } from 'lucide-react'
+import { Menu, LayoutDashboard, Heart, Settings, GripVertical, FilterX } from 'lucide-react'
 import TopNav from './TopNav'
 import ChannelAddForm from './ChannelAddForm'
 import { Channel } from '@/types'
@@ -29,6 +29,7 @@ const COLLAPSED_NAV_ITEMS = [
 const DESKTOP_SIDEBAR_OPEN_KEY = 'yt.desktopSidebarOpen.v1'
 const MODE_KEY = 'yt.mode.v1'
 const TONE_KEY = 'yt.tone.v1'
+const CHANNEL_ORDER_KEY = 'yt.channelOrder.v1'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -36,6 +37,8 @@ interface AppShellProps {
   onChannelAdded?: () => void
   onChannelRemoved?: (channelId: string) => void
   onChannelSelected?: (channelId: string) => void
+  onChannelClearFilter?: () => void
+  selectedChannelIds?: string[]
   newVideoCount?: number
   onManualRefresh?: () => Promise<void>
 }
@@ -45,9 +48,12 @@ interface SidebarContentProps {
   pathname: string
   channels: Channel[]
   newVideoCount: number
+  selectedChannelIds?: string[]
   onChannelAdded?: () => void
   onChannelRemoved?: (channelId: string) => void
   onChannelSelected?: (channelId: string) => void
+  onChannelClearFilter?: () => void
+  onChannelReorder?: (sourceId: string, targetId: string) => void
   onNavigate?: () => void
   onClose?: () => void
 }
@@ -57,12 +63,18 @@ function SidebarContent({
   pathname,
   channels,
   newVideoCount,
+  selectedChannelIds = [],
   onChannelAdded,
   onChannelRemoved,
   onChannelSelected,
+  onChannelClearFilter,
+  onChannelReorder,
   onNavigate,
   onClose,
 }: SidebarContentProps) {
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
   return (
     <>
       <div className="h-14 flex items-center justify-between px-5 font-semibold text-lg border-b border-slate-200 text-slate-800">
@@ -127,22 +139,74 @@ function SidebarContent({
           )}
 
           <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className={`text-[11px] font-medium ${selectedChannelIds.length > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
+                {selectedChannelIds.length > 0 ? `${selectedChannelIds.length}개 채널 필터 중` : '전체 채널'}
+              </span>
+              <button
+                type="button"
+                onClick={onChannelClearFilter}
+                disabled={selectedChannelIds.length === 0}
+                className={`inline-flex items-center gap-1 text-[11px] transition-colors ${
+                  selectedChannelIds.length > 0
+                    ? 'text-blue-500 hover:text-blue-700'
+                    : 'text-slate-300 cursor-default'
+                }`}
+                title="필터 해제"
+              >
+                <FilterX size={12} />
+                전체 보기
+              </button>
+            </div>
             {channels.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500 text-center">
                 아직 등록된 채널이 없습니다
               </div>
             ) : (
               <div className="space-y-1.5">
-                {channels.map((channel) => (
+                {channels.map((channel) => {
+                  const isSelected = selectedChannelIds.includes(channel.youtube_channel_id)
+                  return (
                   <div
                     key={channel.youtube_channel_id}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggingId(channel.youtube_channel_id)
+                      e.dataTransfer.effectAllowed = 'move'
+                      e.dataTransfer.setData('text/plain', channel.youtube_channel_id)
+                    }}
+                    onDragOver={(e) => {
+                      if (!draggingId || draggingId === channel.youtube_channel_id) return
+                      e.preventDefault()
+                      setDragOverId(channel.youtube_channel_id)
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverId === channel.youtube_channel_id) setDragOverId(null)
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const sourceId = e.dataTransfer.getData('text/plain') || draggingId
+                      const targetId = channel.youtube_channel_id
+                      if (sourceId && sourceId !== targetId) onChannelReorder?.(sourceId, targetId)
+                      setDraggingId(null)
+                      setDragOverId(null)
+                    }}
+                    onDragEnd={() => {
+                      setDraggingId(null)
+                      setDragOverId(null)
+                    }}
                     onClick={() => {
                       onChannelSelected?.(channel.youtube_channel_id)
-                      onNavigate?.()
                     }}
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer hover:bg-slate-50 transition-colors"
+                    className={`rounded-lg border px-2.5 py-2 cursor-grab active:cursor-grabbing transition-colors ${
+                      dragOverId === channel.youtube_channel_id
+                        ? 'border-blue-300 bg-blue-50'
+                        : isSelected
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-center gap-2">
                       {channel.thumbnail_url ? (
                         <img
                           src={channel.thumbnail_url}
@@ -162,20 +226,27 @@ function SidebarContent({
                           </div>
                         ) : null}
                       </div>
+                      <span
+                        className="inline-flex items-center justify-center text-slate-300 flex-shrink-0"
+                        title="드래그로 순서 변경"
+                        aria-hidden="true"
+                      >
+                        <GripVertical size={13} />
+                      </span>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
                           onChannelRemoved?.(channel.youtube_channel_id)
                         }}
-                        className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors text-xs leading-none"
+                        className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors text-xs leading-none flex-shrink-0"
                         title="채널 삭제"
                       >
                         ✕
                       </button>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -274,6 +345,8 @@ export default function AppShell({
   onChannelAdded,
   onChannelRemoved,
   onChannelSelected,
+  onChannelClearFilter,
+  selectedChannelIds = [],
   newVideoCount = 0,
   onManualRefresh,
 }: AppShellProps) {
@@ -281,6 +354,7 @@ export default function AppShell({
   const isSettingsPage = pathname === '/settings'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
+  const [channelOrder, setChannelOrder] = useState<string[]>([])
   const [mode, setMode] = useState<'light' | 'dark'>('light')
   const [tone, setTone] = useState<'cool' | 'beige'>('cool')
 
@@ -289,6 +363,17 @@ export default function AppShell({
       const saved = localStorage.getItem(DESKTOP_SIDEBAR_OPEN_KEY)
       if (saved === '0') setDesktopSidebarOpen(false)
       if (saved === '1') setDesktopSidebarOpen(true)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHANNEL_ORDER_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        setChannelOrder(parsed.filter((v): v is string => typeof v === 'string'))
+      }
     } catch {}
   }, [])
 
@@ -310,6 +395,47 @@ export default function AppShell({
     if (mode === 'dark') root.classList.add('dark')
     if (tone === 'beige') root.classList.add('beige')
   }, [mode, tone])
+
+  useEffect(() => {
+    const channelIds = channels.map((c) => c.youtube_channel_id)
+    setChannelOrder((prev) => {
+      const prevFiltered = prev.filter((id) => channelIds.includes(id))
+      const missing = channelIds.filter((id) => !prevFiltered.includes(id))
+      const next = [...prevFiltered, ...missing]
+      try {
+        localStorage.setItem(CHANNEL_ORDER_KEY, JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }, [channels])
+
+  const orderedChannels = (() => {
+    if (channelOrder.length === 0) return channels
+    const idxMap = new Map(channelOrder.map((id, idx) => [id, idx] as const))
+    return [...channels].sort((a, b) => {
+      const aIdx = idxMap.get(a.youtube_channel_id)
+      const bIdx = idxMap.get(b.youtube_channel_id)
+      if (aIdx == null && bIdx == null) return 0
+      if (aIdx == null) return 1
+      if (bIdx == null) return -1
+      return aIdx - bIdx
+    })
+  })()
+
+  const handleChannelReorder = (sourceId: string, targetId: string) => {
+    setChannelOrder((prev) => {
+      const current = prev.length > 0 ? [...prev] : channels.map((c) => c.youtube_channel_id)
+      const sourceIdx = current.indexOf(sourceId)
+      const targetIdx = current.indexOf(targetId)
+      if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return current
+      const [moved] = current.splice(sourceIdx, 1)
+      current.splice(targetIdx, 0, moved)
+      try {
+        localStorage.setItem(CHANNEL_ORDER_KEY, JSON.stringify(current))
+      } catch {}
+      return current
+    })
+  }
 
   const updateDesktopSidebarOpen = (open: boolean) => {
     setDesktopSidebarOpen(open)
@@ -346,11 +472,14 @@ export default function AppShell({
         <SidebarContent
           isSettingsPage={isSettingsPage}
           pathname={pathname}
-          channels={channels}
+          channels={orderedChannels}
           newVideoCount={newVideoCount}
+          selectedChannelIds={selectedChannelIds}
           onChannelAdded={onChannelAdded}
           onChannelRemoved={onChannelRemoved}
           onChannelSelected={onChannelSelected}
+          onChannelClearFilter={onChannelClearFilter}
+          onChannelReorder={handleChannelReorder}
           onClose={() => updateDesktopSidebarOpen(false)}
         />
       </aside>
@@ -373,11 +502,14 @@ export default function AppShell({
         <SidebarContent
           isSettingsPage={isSettingsPage}
           pathname={pathname}
-          channels={channels}
+          channels={orderedChannels}
           newVideoCount={newVideoCount}
+          selectedChannelIds={selectedChannelIds}
           onChannelAdded={onChannelAdded}
           onChannelRemoved={onChannelRemoved}
           onChannelSelected={onChannelSelected}
+          onChannelClearFilter={onChannelClearFilter}
+          onChannelReorder={handleChannelReorder}
           onNavigate={() => setMobileSidebarOpen(false)}
           onClose={() => setMobileSidebarOpen(false)}
         />
