@@ -16,9 +16,6 @@ const SETTINGS_MENU = [
   { label: '뉴스 채널', href: '/settings#news-channels' },
   { label: '채널별 관련주', href: '/settings#channel-stock-mode' },
   { label: '표시 설정', href: '/settings#display-preferences' },
-  { label: '시스템 정보', href: '/settings#system-info' },
-  { label: '환경 설정', href: '/settings#environment-setup' },
-  { label: '고급 설정', href: '/settings#advanced-settings' },
 ] as const
 
 interface AppShellProps {
