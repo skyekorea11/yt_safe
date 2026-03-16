@@ -14,15 +14,279 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
+}
+
+.tone-primary-btn {
+  background-color: #1e293b;
+  color: #ffffff;
+  border: 1px solid #334155;
+}
+
+.tone-primary-btn:hover {
+  background-color: #334155;
+}
+
+html.dark {
+  --background: #020617;
+  --foreground: #e2e8f0;
+}
+
+html.dark .bg-white,
+html.dark .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: #020617 !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-slate-200,
+html.dark .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+html.dark .text-gray-900,
+html.dark .text-slate-900 {
+  color: #e2e8f0 !important;
+}
+
+html.dark .text-gray-800,
+html.dark .text-slate-800 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-slate-600,
+html.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: #1e293b !important;
+}
+
+html.dark .bg-gray-100,
+html.dark .bg-slate-200 {
+  background-color: #1e293b !important;
+}
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #0b1220 !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+html.dark ::placeholder {
+  color: #64748b;
+}
+
+html.beige {
+  --background: #f6f1e7;
+  --foreground: #4b3b2f;
+}
+
+html.beige .bg-white,
+html.beige .bg-slate-50 {
+  background-color: #f2eadf !important;
+}
+
+html.beige .bg-slate-100,
+html.beige .bg-slate-200,
+html.beige .bg-gray-100 {
+  background-color: #e8dccd !important;
+}
+
+html.beige .border-gray-100,
+html.beige .border-gray-200,
+html.beige .border-slate-200,
+html.beige .border-slate-300 {
+  border-color: #d4c2ae !important;
+}
+
+html.beige .text-gray-900,
+html.beige .text-slate-900 {
+  color: #4b3b2f !important;
+}
+
+html.beige .text-gray-800,
+html.beige .text-slate-800,
+html.beige .text-gray-700,
+html.beige .text-slate-700 {
+  color: #5a4738 !important;
+}
+
+html.beige .text-gray-600,
+html.beige .text-gray-500,
+html.beige .text-gray-400,
+html.beige .text-slate-600,
+html.beige .text-slate-500 {
+  color: #7a6653 !important;
+}
+
+html.beige .hover\:bg-gray-50:hover,
+html.beige .hover\:bg-slate-50:hover,
+html.beige .hover\:bg-slate-100:hover {
+  background-color: #e3d6c6 !important;
+}
+
+html.beige input,
+html.beige textarea,
+html.beige select {
+  background-color: #fbf6ee !important;
+  color: #4b3b2f !important;
+  border-color: #d4c2ae !important;
+}
+
+html.beige ::placeholder {
+  color: #9a836d;
+}
+
+html.beige .tone-primary-btn {
+  background-color: #7b604b;
+  color: #fffaf4;
+  border-color: #8d6f57;
+}
+
+html.beige .tone-primary-btn:hover {
+  background-color: #6d543f;
+}
+
+/* Dark + Beige tone override */
+html.dark.beige {
+  --background: #18130f;
+  --foreground: #e8dccf;
+}
+
+html.dark.beige .bg-white,
+html.dark.beige .bg-slate-50 {
+  background-color: #2a211a !important;
+}
+
+html.dark.beige .bg-slate-100,
+html.dark.beige .bg-slate-200,
+html.dark.beige .bg-gray-100 {
+  background-color: #3a2f25 !important;
+}
+
+html.dark.beige .border-gray-100,
+html.dark.beige .border-gray-200,
+html.dark.beige .border-slate-200,
+html.dark.beige .border-slate-300 {
+  border-color: #5a4a3b !important;
+}
+
+html.dark.beige .text-gray-900,
+html.dark.beige .text-slate-900,
+html.dark.beige .text-gray-800,
+html.dark.beige .text-slate-800 {
+  color: #eadfce !important;
+}
+
+html.dark.beige .text-gray-700,
+html.dark.beige .text-slate-700,
+html.dark.beige .text-gray-600,
+html.dark.beige .text-gray-500,
+html.dark.beige .text-gray-400,
+html.dark.beige .text-slate-600,
+html.dark.beige .text-slate-500 {
+  color: #c8b6a3 !important;
+}
+
+html.dark.beige .hover\:bg-gray-50:hover,
+html.dark.beige .hover\:bg-slate-50:hover,
+html.dark.beige .hover\:bg-slate-100:hover {
+  background-color: #4a3b2f !important;
+}
+
+html.dark.beige input,
+html.dark.beige textarea,
+html.dark.beige select {
+  background-color: #241c16 !important;
+  color: #eadfce !important;
+  border-color: #5a4a3b !important;
+}
+
+html.dark.beige ::placeholder {
+  color: #a78f78;
+}
+
+html.dark .tone-primary-btn {
+  background-color: #334155;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+html.dark .tone-primary-btn:hover {
+  background-color: #475569;
+}
+
+html.dark.beige .tone-primary-btn {
+  background-color: #8b6f57;
+  color: #fff4e8;
+  border-color: #9d8066;
+}
+
+html.dark.beige .tone-primary-btn:hover {
+  background-color: #7a604a;
+}
+
+/* Dashboard selected video card by theme/tone */
+.dashboard-video-item.dashboard-video-selected {
+  background-color: #dbe4f0;
+  border-left-color: #334155;
+}
+
+.dashboard-video-item.dashboard-video-selected .video-meta-text {
+  color: #334155 !important;
+}
+
+html.beige .dashboard-video-item.dashboard-video-selected {
+  background-color: #e6d8c8 !important;
+  border-left-color: #6f5a47 !important;
+}
+
+html.beige .dashboard-video-item.dashboard-video-selected .video-meta-text {
+  color: #5a4738 !important;
+}
+
+html.dark .dashboard-video-item.dashboard-video-selected {
+  background-color: #1e293b !important;
+  border-left-color: #94a3b8 !important;
+}
+
+html.dark .dashboard-video-item.dashboard-video-selected .video-meta-text {
+  color: #cbd5e1 !important;
+}
+
+html.dark.beige .dashboard-video-item.dashboard-video-selected {
+  background-color: #3f3228 !important;
+  border-left-color: #b69c84 !important;
+}
+
+html.dark.beige .dashboard-video-item.dashboard-video-selected .video-meta-text {
+  color: #d8c4ad !important;
+}
+
+@media (min-width: 1024px) {
+  html.dark .sidebar-nav-divider,
+  html.dark .sidebar-add-divider {
+    border-color: transparent !important;
+  }
 }

@@ -92,7 +92,11 @@ export default function FavoritesPage() {
           if (prevLastRefreshed.current !== null) await loadAll()
           prevLastRefreshed.current = data.lastRefreshed
         }
-        setRefreshStatus(data)
+        setRefreshStatus((prev) => ({
+          ...prev,
+          ...data,
+          nextRefresh: data.nextRefresh ?? prev.nextRefresh,
+        }))
       } catch {}
     }
     poll()
@@ -373,7 +377,7 @@ export default function FavoritesPage() {
             prev === video.youtube_video_id ? null : video.youtube_video_id
           )
         }
-        className={`border rounded-2xl bg-white p-4 space-y-3 transition-colors ${
+        className={`border rounded-2xl bg-white shadow-sm p-4 space-y-3 transition-colors ${
           isSelected ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200'
         }`}
       >
@@ -387,7 +391,7 @@ export default function FavoritesPage() {
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="flex-1 text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">
+              <h3 className="flex-1 text-[14px] font-semibold text-gray-900 line-clamp-2 leading-snug">
                 {video.title}
               </h3>
               <button
@@ -398,7 +402,7 @@ export default function FavoritesPage() {
                 <Heart size={14} className={isFav ? 'text-red-400 fill-red-400' : 'text-gray-300'} />
               </button>
             </div>
-            <p className="mt-0.5 text-xs text-gray-400">
+            <p className={`mt-0.5 text-xs ${isSelected ? 'text-slate-700' : 'text-gray-500'}`}>
               {getChannelDisplayName(video)} · {formatDate(video.published_at)}
             </p>
             {stocks.length > 0 && (
@@ -425,14 +429,14 @@ export default function FavoritesPage() {
 
         {/* Summary */}
         {video.summary_status === 'complete' && video.summary_text && (
-          <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
+          <p className="text-xs text-gray-700 line-clamp-3 leading-relaxed">
             {video.summary_text}
           </p>
         )}
 
         {/* Related articles (2 compact) */}
         {isNewsLoading ? (
-          <p className="text-xs text-gray-400 animate-pulse">뉴스 로딩 중...</p>
+          <p className="text-xs text-gray-500 animate-pulse">뉴스 로딩 중...</p>
         ) : articles.length > 0 ? (
           <div className="space-y-1">
             {articles.slice(0, 2).map((a, i) => (
@@ -444,7 +448,7 @@ export default function FavoritesPage() {
                 className="flex items-start gap-1.5 group"
               >
                 <Newspaper size={11} className="mt-0.5 text-gray-300 flex-shrink-0" />
-                <span className="text-xs text-gray-500 group-hover:text-gray-800 line-clamp-1 transition-colors">
+                <span className="text-xs text-gray-600 group-hover:text-gray-900 line-clamp-1 transition-colors">
                   {a.title}
                 </span>
               </a>
@@ -453,12 +457,12 @@ export default function FavoritesPage() {
         ) : null}
 
         {/* Action row */}
-        <div className="flex items-center gap-3 pt-1 border-t border-gray-50">
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100">
           <a
             href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ExternalLink size={11} />
             유튜브
@@ -466,7 +470,7 @@ export default function FavoritesPage() {
           {articles.length === 0 && !isNewsLoading ? (
             <button
               onClick={() => void loadRelatedNews(video.youtube_video_id, newsCacheKey)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <Newspaper size={11} />
               뉴스 불러오기
@@ -474,7 +478,7 @@ export default function FavoritesPage() {
           ) : (
             <button
               onClick={() => void loadRelatedNews(video.youtube_video_id, newsCacheKey, 'news')}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <RefreshCw size={11} />
               뉴스 새로고침
@@ -482,12 +486,12 @@ export default function FavoritesPage() {
           )}
           <button
             onClick={() => void loadRelatedNews(video.youtube_video_id, newsCacheKey, 'stocks')}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <RefreshCw size={11} />
             {isStocksLoading ? '종목 로딩 중...' : '종목 새로고침'}
           </button>
-          <span className="ml-auto text-[11px] text-amber-600 font-medium">
+          <span className="ml-auto text-[11px] text-amber-700 font-semibold">
             {isSelected ? '선택됨' : '클릭해서 메모'}
           </span>
         </div>
@@ -508,7 +512,7 @@ export default function FavoritesPage() {
               href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-200 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
             >
               <ExternalLink size={12} />
               유튜브에서 열기
@@ -522,7 +526,7 @@ export default function FavoritesPage() {
             <button
               onClick={handleSaveNote}
               disabled={isNoteSaving}
-              className="w-full py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="tone-primary-btn w-full py-2 text-sm font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {isNoteSaving ? '저장 중...' : '메모 저장'}
             </button>
@@ -568,10 +572,10 @@ export default function FavoritesPage() {
     <AppShell {...shellProps}>
 
       {/* Header */}
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex items-center gap-2 xl:text-slate-900">
         <Heart size={18} className="text-red-400 fill-red-400" />
-        <h1 className="text-base font-semibold text-gray-800">나의 리서치</h1>
-        <span className="text-sm text-gray-400">({favoriteVideos.length}개 영상)</span>
+        <h1 className="text-lg font-semibold text-gray-900">나의 리서치</h1>
+        <span className="text-sm text-gray-500">({favoriteVideos.length}개 영상)</span>
       </div>
 
       {favoriteVideos.length === 0 ? (
@@ -589,8 +593,8 @@ export default function FavoritesPage() {
                 onClick={() => setSelectedTicker('all')}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   selectedTicker === 'all'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 전체 {favoriteVideos.length}
@@ -600,8 +604,8 @@ export default function FavoritesPage() {
                   onClick={() => setSelectedTicker('uncategorized')}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                     selectedTicker === 'uncategorized'
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   미분류 {ungroupedVideos.length}
@@ -647,7 +651,7 @@ export default function FavoritesPage() {
                     if (match) setSelectedTicker(match)
                   }}
                   placeholder="종목 검색"
-                  className="h-9 w-48 rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 bg-white"
+                  className="h-9 w-52 rounded-lg border border-slate-300 px-2.5 text-sm text-slate-700 bg-slate-50"
                 />
                 <datalist id="favorite-stock-options">
                   {sortedTickers.map((ticker) => {
@@ -671,8 +675,8 @@ export default function FavoritesPage() {
                     onClick={() => setSelectedTicker(ticker)}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       selectedTicker === ticker
-                        ? 'bg-gray-800 text-white'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
                     {entry.stock.name} {entry.videos.length}
@@ -682,7 +686,7 @@ export default function FavoritesPage() {
               {selectedTickerIsHidden && (
                 <button
                   onClick={() => setShowAllStockTabs(true)}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-gray-800 text-white"
+                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-slate-800 text-white"
                 >
                   {stockVideoMap.get(selectedTicker as string)?.stock.name || selectedTicker}
                 </button>
@@ -690,7 +694,7 @@ export default function FavoritesPage() {
               {hiddenTickers.length > 0 && (
                 <button
                   onClick={() => setShowAllStockTabs((prev) => !prev)}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-slate-50 border border-slate-300 text-slate-600 hover:bg-slate-100"
                 >
                   {showAllStockTabs ? '접기' : `종목 더보기 ${hiddenTickers.length}`}
                 </button>
@@ -698,7 +702,7 @@ export default function FavoritesPage() {
             </div>
 
             {showAllStockTabs && hiddenTickers.length > 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-2 flex flex-wrap gap-1.5">
+              <div className="rounded-xl border border-slate-300 bg-slate-50 p-2 flex flex-wrap gap-1.5">
                 {hiddenTickers.map((ticker) => {
                   const entry = stockVideoMap.get(ticker)!
                   return (
@@ -707,8 +711,8 @@ export default function FavoritesPage() {
                       onClick={() => setSelectedTicker(ticker)}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                         selectedTicker === ticker
-                          ? 'bg-gray-800 text-white'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          ? 'bg-slate-800 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
                       {entry.stock.name} {entry.videos.length}
@@ -741,15 +745,15 @@ export default function FavoritesPage() {
               )}
             </div>
 
-            <aside className="hidden xl:block border border-gray-200 rounded-2xl bg-white p-4 xl:sticky xl:top-24">
-              <h2 className="text-sm font-semibold text-gray-800">영상 보기 · 메모</h2>
+            <aside className="hidden xl:block border border-slate-300 rounded-2xl bg-slate-50 shadow-sm p-4 xl:sticky xl:top-24">
+              <h2 className="text-sm font-semibold text-gray-900">영상 보기 · 메모</h2>
               {selectedVideo ? (
                 <div className="mt-3 space-y-3">
-                  <div className="rounded-xl border border-gray-100 p-3">
+                  <div className="rounded-xl border border-slate-200 p-3">
                     <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
                     <p className="mt-1 text-sm font-medium text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                   </div>
-                  <div className="rounded-xl border border-gray-200 overflow-hidden bg-black">
+                  <div className="rounded-xl border border-slate-300 overflow-hidden bg-black">
                     <iframe
                       src={`https://www.youtube.com/embed/${selectedVideo.youtube_video_id}`}
                       className="w-full aspect-video"
@@ -769,12 +773,12 @@ export default function FavoritesPage() {
                     value={editingNoteText}
                     onChange={(e) => setEditingNoteText(e.target.value)}
                     placeholder="선택한 영상의 메모를 작성하세요..."
-                    className="w-full min-h-[220px] resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 leading-relaxed"
+                    className="w-full min-h-[220px] resize-none rounded-xl border border-slate-300 bg-white p-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 leading-relaxed"
                   />
                   <button
                     onClick={handleSaveNote}
                     disabled={isNoteSaving}
-                    className="w-full py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="tone-primary-btn w-full py-2 text-sm font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     {isNoteSaving ? '저장 중...' : '메모 저장'}
                   </button>

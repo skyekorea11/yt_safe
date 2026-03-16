@@ -113,7 +113,11 @@ export default function DashboardPage() {
           if (prevLastRefreshed.current !== null) await loadData()
           prevLastRefreshed.current = data.lastRefreshed
         }
-        setRefreshStatus(data)
+        setRefreshStatus((prev) => ({
+          ...prev,
+          ...data,
+          nextRefresh: data.nextRefresh ?? prev.nextRefresh,
+        }))
       } catch {}
     }
     poll()
@@ -432,13 +436,13 @@ export default function DashboardPage() {
   }
 
   const renderVideoDetail = (video: Video) => (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {(() => {
         const mobileNewsOpen = mobileDetailPanels[video.youtube_video_id]?.news ?? false
         const mobileStocksOpen = mobileDetailPanels[video.youtube_video_id]?.stocks ?? false
         return (
           <>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 pb-1 border-b border-gray-100">
         <div>
           <h2 className="text-lg font-bold text-gray-900 leading-snug">
             {video.title}
@@ -446,7 +450,7 @@ export default function DashboardPage() {
           {isNewVideo(video) && (
             <div className="mt-1 flex items-center gap-1.5 text-xs">
               <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-semibold">New</span>
-              <span className="text-gray-400">
+              <span className="text-gray-500">
                 {new Date(video.created_at).toLocaleString('ko-KR', {
                   year: 'numeric', month: '2-digit', day: '2-digit',
                   hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -458,7 +462,7 @@ export default function DashboardPage() {
         <button
           onClick={() => toggleFavorite(video.youtube_video_id)}
           disabled={togglingIds.has(video.youtube_video_id)}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
         >
           <Heart
             size={14}
@@ -480,21 +484,21 @@ export default function DashboardPage() {
         </div>
 
         <div className="border border-gray-200 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">영상 요약</h3>
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">영상 요약</h3>
           {video.transcript_status === 'not_available' ? (
-            <p className="text-sm text-gray-400">아직 자막을 추출할 수 없습니다.</p>
+            <p className="text-sm text-gray-500">아직 자막을 추출할 수 없습니다.</p>
           ) : video.transcript_status === 'pending' ? (
-            <p className="text-sm text-gray-400 animate-pulse">자막 추출 중...</p>
+            <p className="text-sm text-gray-500 animate-pulse">자막 추출 중...</p>
           ) : video.summary_status === 'failed' && video.summary_text ? (
-            <p className="text-sm text-gray-400">{video.summary_text}</p>
+            <p className="text-sm text-gray-600">{video.summary_text}</p>
           ) : video.summary_status === 'complete' && video.summary_text ? (
-            <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
+              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
               {video.summary_text}
             </p>
           ) : isSummaryLoading ? (
-            <p className="text-sm text-gray-400 animate-pulse">요약 생성 중...</p>
+            <p className="text-sm text-gray-500 animate-pulse">요약 생성 중...</p>
           ) : (
-            <p className="text-sm text-gray-400">아직 요약이 없습니다</p>
+            <p className="text-sm text-gray-500">아직 요약이 없습니다</p>
           )}
         </div>
 
@@ -502,7 +506,7 @@ export default function DashboardPage() {
           <button
             onClick={() => handleRefreshSummary(video.youtube_video_id)}
             disabled={isSummaryLoading}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="tone-primary-btn px-4 py-2 text-sm font-medium rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {isSummaryLoading
               ? video.transcript_status === 'pending'
@@ -528,20 +532,20 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="border border-gray-200 rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-700">관련 뉴스</h3>
+            <h3 className="text-sm font-semibold text-gray-800">관련 뉴스</h3>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
                   void loadRelatedNews(video.youtube_video_id, cacheKey, 'news')
                 }}
-                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 새로고침
               </button>
               <button
                 onClick={() => toggleMobilePanel(video.youtube_video_id, 'news')}
-                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 {mobileNewsOpen ? '접기' : '펼치기'}
               </button>
@@ -549,11 +553,11 @@ export default function DashboardPage() {
           </div>
           <div className={`${mobileNewsOpen ? 'block' : 'hidden'} xl:block`}>
             {newsLoadingVideoId === video.youtube_video_id ? (
-              <p className="text-sm text-gray-400 animate-pulse">관련 뉴스를 찾는 중...</p>
+              <p className="text-sm text-gray-500 animate-pulse">관련 뉴스를 찾는 중...</p>
             ) : newsErrorByVideoId[video.youtube_video_id] ? (
-              <p className="text-sm text-gray-400">{newsErrorByVideoId[video.youtube_video_id]}</p>
+              <p className="text-sm text-gray-500">{newsErrorByVideoId[video.youtube_video_id]}</p>
             ) : (newsByVideoId[video.youtube_video_id] || []).length === 0 ? (
-              <p className="text-sm text-gray-400">{getEmptyNewsMessage(video)}</p>
+              <p className="text-sm text-gray-500">{getEmptyNewsMessage(video)}</p>
             ) : (
               <div className="space-y-2">
                 {(newsByVideoId[video.youtube_video_id] || []).slice(0, 4).map((article, idx) => (
@@ -568,8 +572,8 @@ export default function DashboardPage() {
                         rel="noreferrer"
                         className="flex-1 min-w-0"
                       >
-                        <p className="text-sm font-medium text-gray-800 line-clamp-2">{article.title}</p>
-                        <p className="mt-1 text-xs text-gray-400">
+                      <p className="text-sm font-medium text-gray-900 line-clamp-2">{article.title}</p>
+                      <p className="mt-1 text-xs text-gray-500">
                           {article.source}
                           {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
                         </p>
@@ -596,20 +600,20 @@ export default function DashboardPage() {
 
         <div className="border border-gray-200 rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-700">관련 종목</h3>
+            <h3 className="text-sm font-semibold text-gray-800">관련 종목</h3>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
                   void loadRelatedNews(video.youtube_video_id, cacheKey, 'stocks')
                 }}
-                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 종목 새로고침
               </button>
               <button
                 onClick={() => toggleMobilePanel(video.youtube_video_id, 'stocks')}
-                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
               >
                 {mobileStocksOpen ? '접기' : '펼치기'}
               </button>
@@ -617,9 +621,9 @@ export default function DashboardPage() {
           </div>
           <div className={`${mobileStocksOpen ? 'block' : 'hidden'} xl:block`}>
             {stocksLoadingVideoId === video.youtube_video_id ? (
-              <p className="text-sm text-gray-400 animate-pulse">분석 중...</p>
+              <p className="text-sm text-gray-500 animate-pulse">분석 중...</p>
             ) : (stocksByVideoId[video.youtube_video_id] || []).length === 0 ? (
-              <p className="text-sm text-gray-400">{getEmptyStocksMessage(video)}</p>
+              <p className="text-sm text-gray-500">{getEmptyStocksMessage(video)}</p>
             ) : (
               <div className="space-y-2">
                 {(stocksByVideoId[video.youtube_video_id] || []).map((stock) => {
@@ -640,7 +644,7 @@ export default function DashboardPage() {
                       rel="noreferrer"
                       className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
                         stock.is_core
-                          ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                          ? 'border-amber-300 hover:bg-amber-50/30'
                           : 'border-gray-100 hover:bg-gray-50'
                       }`}
                     >
@@ -648,10 +652,10 @@ export default function DashboardPage() {
                         {stock.is_core && (
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-white">핵심</span>
                         )}
-                        <span className="text-sm font-medium text-gray-800">{stock.name}</span>
+                          <span className="text-sm font-medium text-gray-900">{stock.name}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400">{stock.ticker}</span>
+                        <span className="text-xs text-gray-500">{stock.ticker}</span>
                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${marketBadge}`}>
                           {stock.market}
                         </span>
@@ -676,11 +680,11 @@ export default function DashboardPage() {
 
   return (
     <AppShell {...shellProps}>
-      <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)_320px] gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[380px_minmax(0,1fr)_320px] gap-5 xl:text-slate-900">
 
         {/* ── 좌측: 영상 목록 ──────────────────────────────────────────── */}
         <div
-          className="border border-gray-200 rounded-2xl bg-white overflow-y-auto"
+          className="border border-slate-300 rounded-2xl bg-slate-50 shadow-sm overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
           onScroll={(e) => {
             const el = e.currentTarget
@@ -713,10 +717,10 @@ export default function DashboardPage() {
                       prev === video.youtube_video_id ? null : video.youtube_video_id
                     )
                   }
-                  className={`
+                  className={`dashboard-video-item
                     w-full text-left p-4 transition-colors cursor-pointer
-                    ${idx !== 0 ? 'border-t border-gray-100' : ''}
-                    ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}
+                    ${idx !== 0 ? 'border-t border-slate-200' : ''}
+                    ${isSelected ? 'dashboard-video-selected border-l-4 pl-3' : 'hover:bg-slate-100'}
                   `}
                 >
                   <div className="flex gap-2.5">
@@ -726,15 +730,15 @@ export default function DashboardPage() {
                       className="w-22 h-12 object-cover rounded-lg flex-shrink-0 border border-gray-100"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-1">
-                        <h3 className="flex-1 text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">
+                      <div className="flex items-start gap-1.5">
+                        <h3 className="flex-1 text-[14px] font-semibold text-gray-900 line-clamp-2 leading-snug">
                           {video.title}
                         </h3>
                         {/* 하트 버튼 */}
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleFavorite(video.youtube_video_id) }}
                           disabled={togglingIds.has(video.youtube_video_id)}
-                          className="flex-shrink-0 p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                        className="flex-shrink-0 p-1 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
                           title={isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'}
                         >
                           <Heart
@@ -743,10 +747,10 @@ export default function DashboardPage() {
                           />
                         </button>
                       </div>
-                      <p className="mt-1 text-xs text-gray-400 truncate">
+                      <p className={`video-meta-text mt-1 text-xs truncate ${isSelected ? 'text-slate-700' : 'text-gray-500'}`}>
                         {getChannelDisplayName(video)}
                       </p>
-                      <p className="mt-0.5 text-xs text-gray-300 flex items-center gap-1">
+                      <p className={`video-meta-text mt-0.5 text-xs flex items-center gap-1 ${isSelected ? 'text-slate-700' : 'text-gray-500'}`}>
                         {isNewVideo(video) && (
                           <span className="px-1 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-semibold leading-none">New</span>
                         )}
@@ -756,7 +760,11 @@ export default function DashboardPage() {
                   </div>
 
                   {isSelected && (
-                    <div className="xl:hidden mt-3 border-t border-gray-200 pt-3">
+                    <div
+                      className="xl:hidden mt-3 border-t border-gray-200 pt-3"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       {renderVideoDetail(video)}
                     </div>
                   )}
@@ -768,7 +776,7 @@ export default function DashboardPage() {
 
         {/* ── 가운데: 영상 상세 ────────────────────────────────────────── */}
         <div
-          className="hidden xl:block border border-gray-200 rounded-2xl bg-white p-6 overflow-y-auto"
+          className="hidden xl:block border border-slate-300 rounded-2xl bg-slate-50 shadow-sm p-6 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           {selectedVideo ? (
@@ -783,7 +791,7 @@ export default function DashboardPage() {
 
         {/* ── 우측: 뉴스 채널 최신 제목 ───────────────────────────────── */}
         <aside
-          className="border border-gray-200 rounded-2xl bg-white p-4 xl:sticky xl:top-24 overflow-y-auto"
+          className="border border-slate-300 rounded-2xl bg-slate-50 shadow-sm p-4 xl:sticky xl:top-24 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           <div className="flex items-center justify-between gap-2">
@@ -791,7 +799,7 @@ export default function DashboardPage() {
             <button
               onClick={() => void loadNewsChannelPanel(true)}
               disabled={newsPanelLoading}
-              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition-colors"
             >
               새로고침
             </button>

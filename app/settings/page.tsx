@@ -51,7 +51,11 @@ export default function SettingsPage() {
           if (prevLastRefreshed.current !== null) await loadChannels()
           prevLastRefreshed.current = data.lastRefreshed
         }
-        setRefreshStatus(data)
+        setRefreshStatus((prev) => ({
+          ...prev,
+          ...data,
+          nextRefresh: data.nextRefresh ?? prev.nextRefresh,
+        }))
       } catch {}
     }
     poll()

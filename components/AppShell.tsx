@@ -27,6 +27,8 @@ const COLLAPSED_NAV_ITEMS = [
 ] as const
 
 const DESKTOP_SIDEBAR_OPEN_KEY = 'yt.desktopSidebarOpen.v1'
+const MODE_KEY = 'yt.mode.v1'
+const TONE_KEY = 'yt.tone.v1'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -64,13 +66,13 @@ function SidebarContent({
 }: SidebarContentProps) {
   return (
     <>
-      <div className="h-14 flex items-center justify-between px-5 font-semibold text-lg border-b border-gray-200 text-gray-800">
+      <div className="h-14 flex items-center justify-between px-5 font-semibold text-lg border-b border-slate-200 text-slate-800">
         <span>{isSettingsPage ? 'Settings' : 'Channels'}</span>
         {onClose ? (
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-100"
             aria-label="사이드바 닫기"
           >
             ✕
@@ -78,7 +80,7 @@ function SidebarContent({
         ) : null}
       </div>
 
-      <div className="px-3 py-2 border-b border-gray-100 flex gap-1">
+      <div className="px-3 py-2 border-b border-slate-200/70 flex gap-1 sidebar-nav-divider">
         {NAV_ITEMS.map(({ label, href }) => {
           const isActive = pathname === href
           return (
@@ -88,8 +90,8 @@ function SidebarContent({
               onClick={onNavigate}
               className={`flex-1 text-center px-2 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+                  ? 'bg-slate-200 text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
             >
               {label}
@@ -106,7 +108,7 @@ function SidebarContent({
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className="block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                className="block rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 {item.label}
               </Link>
@@ -115,7 +117,7 @@ function SidebarContent({
         </div>
       ) : (
         <>
-          <div className="px-4 py-3 border-b border-gray-100">
+          <div className="px-4 py-3 border-b border-slate-200/70 sidebar-add-divider">
             <ChannelAddForm onSuccess={onChannelAdded} compact />
           </div>
 
@@ -127,7 +129,7 @@ function SidebarContent({
 
           <div className="flex-1 overflow-y-auto px-3 py-3">
             {channels.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-400 text-center">
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500 text-center">
                 아직 등록된 채널이 없습니다
               </div>
             ) : (
@@ -139,24 +141,24 @@ function SidebarContent({
                       onChannelSelected?.(channel.youtube_channel_id)
                       onNavigate?.()
                     }}
-                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer hover:bg-slate-50 transition-colors"
                   >
                     <div className="flex items-start gap-2">
                       {channel.thumbnail_url ? (
                         <img
                           src={channel.thumbnail_url}
                           alt={channel.title}
-                          className="w-7 h-7 rounded-md object-cover flex-shrink-0 border border-gray-100"
+                          className="w-7 h-7 rounded-md object-cover flex-shrink-0 border border-slate-200"
                         />
                       ) : (
-                        <div className="w-7 h-7 rounded-md bg-gray-100 flex-shrink-0" />
+                        <div className="w-7 h-7 rounded-md bg-slate-200 flex-shrink-0" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-[13px] text-gray-800 truncate">
+                        <div className="font-medium text-[13px] text-slate-800 truncate">
                           {channel.title}
                         </div>
                         {channel.handle ? (
-                          <div className="text-[11px] text-gray-400 truncate mt-0.5">
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">
                             {channel.handle}
                           </div>
                         ) : null}
@@ -167,7 +169,7 @@ function SidebarContent({
                           e.stopPropagation()
                           onChannelRemoved?.(channel.youtube_channel_id)
                         }}
-                        className="rounded-md p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors text-xs leading-none"
+                        className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors text-xs leading-none"
                         title="채널 삭제"
                       >
                         ✕
@@ -195,12 +197,12 @@ function CollapsedSidebarRail({
 }) {
   if (mobile) {
     return (
-      <aside className="fixed inset-x-0 bottom-0 z-40 flex lg:hidden h-14 bg-white border-t border-gray-200 px-2">
+      <aside className="fixed inset-x-0 bottom-0 z-40 flex lg:hidden h-14 bg-slate-50 border-t border-slate-200 px-2">
         <div className="w-full h-full flex items-center justify-between">
           <button
             type="button"
             onClick={onOpen}
-            className="inline-flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            className="inline-flex items-center justify-center w-10 h-10 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
             aria-label="사이드바 열기"
           >
             <Menu size={16} />
@@ -215,8 +217,8 @@ function CollapsedSidebarRail({
                   href={item.href}
                   className={`inline-flex items-center justify-center w-10 h-10 rounded-md border transition-colors ${
                     isActive
-                      ? 'border-gray-300 bg-gray-100 text-gray-900'
-                      : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                      ? 'border-slate-400 bg-slate-200 text-slate-900'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-100'
                   }`}
                   title={item.label}
                   aria-label={item.label}
@@ -232,17 +234,17 @@ function CollapsedSidebarRail({
   }
 
   return (
-    <aside className="hidden lg:flex w-12 shrink-0 bg-white border-r border-gray-200 items-start justify-start pt-3">
+    <aside className="hidden lg:flex w-12 shrink-0 bg-slate-50 border-r border-slate-200 items-start justify-start pt-3">
       <div className="w-full flex flex-col items-center gap-2">
         <button
           type="button"
           onClick={onOpen}
-          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
           aria-label="사이드바 열기"
         >
           <Menu size={16} />
         </button>
-        <div className="w-7 h-px bg-gray-200 my-1" />
+        <div className="w-7 h-px bg-slate-300 my-1" />
         {COLLAPSED_NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href
@@ -252,8 +254,8 @@ function CollapsedSidebarRail({
               href={item.href}
               className={`inline-flex items-center justify-center w-8 h-8 rounded-md border transition-colors ${
                 isActive
-                  ? 'border-gray-300 bg-gray-100 text-gray-900'
-                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                  ? 'border-slate-400 bg-slate-200 text-slate-900'
+                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
               }`}
               title={item.label}
               aria-label={item.label}
@@ -281,6 +283,8 @@ export default function AppShell({
   const isSettingsPage = pathname === '/settings'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
+  const [mode, setMode] = useState<'light' | 'dark'>('light')
+  const [tone, setTone] = useState<'cool' | 'beige'>('cool')
 
   useEffect(() => {
     try {
@@ -290,6 +294,25 @@ export default function AppShell({
     } catch {}
   }, [])
 
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem(MODE_KEY)
+      const savedTone = localStorage.getItem(TONE_KEY)
+      if (savedMode === 'light' || savedMode === 'dark') setMode(savedMode)
+      if (savedTone === 'cool' || savedTone === 'beige') setTone(savedTone)
+      if (savedMode === 'light' || savedMode === 'dark') return
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      setMode(prefersDark ? 'dark' : 'light')
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.remove('dark', 'beige')
+    if (mode === 'dark') root.classList.add('dark')
+    if (tone === 'beige') root.classList.add('beige')
+  }, [mode, tone])
+
   const updateDesktopSidebarOpen = (open: boolean) => {
     setDesktopSidebarOpen(open)
     try {
@@ -297,10 +320,28 @@ export default function AppShell({
     } catch {}
   }
 
+  const toggleMode = () =>
+    setMode((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      try {
+        localStorage.setItem(MODE_KEY, next)
+      } catch {}
+      return next
+    })
+
+  const toggleTone = () =>
+    setTone((prev) => {
+      const next = prev === 'beige' ? 'cool' : 'beige'
+      try {
+        localStorage.setItem(TONE_KEY, next)
+      } catch {}
+      return next
+    })
+
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-slate-100">
       <aside
-        className={`hidden w-72 shrink-0 bg-white border-r border-gray-200 flex-col overflow-hidden ${
+        className={`hidden w-72 shrink-0 bg-slate-50 border-r border-slate-200 flex-col overflow-hidden ${
           desktopSidebarOpen ? 'lg:flex' : 'lg:hidden'
         }`}
       >
@@ -321,13 +362,13 @@ export default function AppShell({
 
       {mobileSidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/30"
+          className="lg:hidden fixed inset-0 z-40 bg-slate-900/35"
           onClick={() => setMobileSidebarOpen(false)}
           aria-hidden="true"
         />
       )}
       <aside
-        className={`lg:hidden fixed inset-x-0 bottom-0 z-50 h-[75vh] max-h-[640px] bg-white border-t border-gray-200 rounded-t-2xl flex flex-col overflow-hidden transition-transform duration-200 ${
+        className={`lg:hidden fixed inset-x-0 bottom-0 z-50 h-[75vh] max-h-[640px] bg-slate-50 border-t border-slate-200 rounded-t-2xl flex flex-col overflow-hidden transition-transform duration-200 ${
           mobileSidebarOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
@@ -345,7 +386,14 @@ export default function AppShell({
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <TopNav nextRefresh={nextRefresh} onManualRefresh={onManualRefresh} />
+        <TopNav
+          nextRefresh={nextRefresh}
+          onManualRefresh={onManualRefresh}
+          mode={mode}
+          tone={tone}
+          onModeToggle={toggleMode}
+          onToneToggle={toggleTone}
+        />
         <main className="flex-1 overflow-y-auto p-5 pb-20 lg:pb-5">{children}</main>
       </div>
 
