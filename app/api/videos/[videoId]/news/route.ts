@@ -396,6 +396,11 @@ const SCIENCE_TOPIC_KEYWORDS = [
   '신경과학', '뇌과학', '기후', '환경과학', '생명체', '신호포착',
 ]
 
+const LOW_STOCK_TOPIC_KEYWORDS = [
+  '아프리카', '원조', '공적개발원조', 'oda', '기부금', '국제개발', '개발원조',
+  '원조효과', '거버넌스', '제도경제학', '부패', '원조피로', '역사를보다',
+]
+
 function ensureMinStocks(stocks: StockSuggestion[], minCount = 6): StockSuggestion[] {
   if (stocks.length === 0 || stocks.length >= minCount) return stocks
 
@@ -924,6 +929,7 @@ function buildStockCandidates(params: {
   const { titleText, summaryText, geminiStocks, taxonomyStocks } = params
   const baseText = `${titleText} ${summaryText}`.trim()
   const normalized = baseText.toLowerCase().replace(/\s+/g, '')
+  const isLowStockTopic = LOW_STOCK_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
   const isScienceTopic = SCIENCE_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
   const isStarlinkTelecomTopic =
     ['스타링크', 'starlink', '스페이스x', 'spacex', '위성통신', '위성네트워크', '버라이즌', 'verizon', 'at&t', 'att', 'atnt', '통신업계']
@@ -934,6 +940,11 @@ function buildStockCandidates(params: {
   const keywordStocks = useKeywordFallback
     ? findRelatedStocks(baseText, isStarlinkTelecomTopic ? 6 : 3)
     : []
+
+  if (isLowStockTopic) {
+    // 국제개발/거버넌스형 콘텐츠는 특정 종목 매핑 신뢰도가 낮아 종목 추천을 비활성화한다.
+    return []
+  }
 
   if (isScienceTopic) {
     // 과학 주제는 규칙 기반 분류를 우선하고, 금융/유통 등 잡음이 큰 LLM 보강은 배제한다.
