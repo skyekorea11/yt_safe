@@ -57,6 +57,7 @@ export default function FavoritesPage() {
 
   const [selectedTicker, setSelectedTicker] = useState<TabKey>('all')
   const [showAllStockTabs, setShowAllStockTabs] = useState(false)
+  const [stockSearchInput, setStockSearchInput] = useState('')
   const [notesByVideoId, setNotesByVideoId] = useState<Record<string, string>>({})
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
   const [editingNoteText, setEditingNoteText] = useState('')
@@ -325,6 +326,16 @@ export default function FavoritesPage() {
     selectedTicker !== 'uncategorized' &&
     hiddenTickers.includes(selectedTicker)
 
+  useEffect(() => {
+    if (selectedTicker === 'all' || selectedTicker === 'uncategorized') {
+      setStockSearchInput('')
+      return
+    }
+    const entry = stockVideoMap.get(selectedTicker)
+    if (!entry) return
+    setStockSearchInput(`${entry.stock.name} (${selectedTicker})`)
+  }, [selectedTicker, stockVideoMap])
+
   const shellProps = {
     channels,
     onChannelAdded: loadAll,
@@ -551,28 +562,57 @@ export default function FavoritesPage() {
                 </button>
               )}
               <div className="ml-auto">
-                <select
-                  value={
-                    selectedTicker === 'all' || selectedTicker === 'uncategorized'
-                      ? ''
-                      : selectedTicker
-                  }
+                <input
+                  list="favorite-stock-options"
+                  value={stockSearchInput}
                   onChange={(e) => {
                     const value = e.target.value
-                    if (value) setSelectedTicker(value)
+                    setStockSearchInput(value)
+                    const normalized = value.toLowerCase().trim()
+                    if (!normalized) return
+                    for (const ticker of sortedTickers) {
+                      const entry = stockVideoMap.get(ticker)
+                      if (!entry) continue
+                      const optionLabel = `${entry.stock.name} (${ticker})`
+                      if (
+                        optionLabel.toLowerCase() === normalized ||
+                        ticker.toLowerCase() === normalized ||
+                        entry.stock.name.toLowerCase() === normalized
+                      ) {
+                        setSelectedTicker(ticker)
+                        return
+                      }
+                    }
                   }}
-                  className="h-9 rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 bg-white"
-                >
-                  <option value="">종목 선택</option>
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    const normalized = stockSearchInput.toLowerCase().trim()
+                    if (!normalized) return
+                    const match = sortedTickers.find((ticker) => {
+                      const entry = stockVideoMap.get(ticker)
+                      if (!entry) return false
+                      const optionLabel = `${entry.stock.name} (${ticker})`.toLowerCase()
+                      return (
+                        optionLabel.includes(normalized) ||
+                        ticker.toLowerCase().includes(normalized) ||
+                        entry.stock.name.toLowerCase().includes(normalized)
+                      )
+                    })
+                    if (match) setSelectedTicker(match)
+                  }}
+                  placeholder="종목 검색"
+                  className="h-9 w-48 rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 bg-white"
+                />
+                <datalist id="favorite-stock-options">
                   {sortedTickers.map((ticker) => {
                     const entry = stockVideoMap.get(ticker)!
                     return (
-                      <option key={ticker} value={ticker}>
+                      <option key={ticker} value={`${entry.stock.name} (${ticker})`}>
                         {entry.stock.name} ({entry.videos.length})
                       </option>
                     )
                   })}
-                </select>
+                </datalist>
               </div>
             </div>
 
