@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.channels (
   youtube_channel_id TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   stock_mode TEXT NOT NULL DEFAULT 'auto',
+  news_mode TEXT NOT NULL DEFAULT 'auto',
   handle TEXT,
   description TEXT,
   thumbnail_url TEXT,
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS public.channels (
 
 ALTER TABLE public.channels
   ADD COLUMN IF NOT EXISTS stock_mode TEXT NOT NULL DEFAULT 'auto';
+
+ALTER TABLE public.channels
+  ADD COLUMN IF NOT EXISTS news_mode TEXT NOT NULL DEFAULT 'auto';
 
 -- Create videos table
 CREATE TABLE IF NOT EXISTS public.videos (

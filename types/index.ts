@@ -7,6 +7,7 @@ export interface Channel {
   youtube_channel_id: string;
   title: string;
   stock_mode?: 'auto' | 'low_stock' | 'off';
+  news_mode?: 'auto' | 'strict' | 'off';
   handle: string;
   description: string;
   thumbnail_url: string;

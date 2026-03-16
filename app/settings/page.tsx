@@ -16,6 +16,7 @@ import AppShell from '@/components/AppShell'
 import { Settings, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react'
 
 type ChannelStockMode = 'auto' | 'low_stock' | 'off'
+type ChannelNewsMode = 'auto' | 'strict' | 'off'
 
 export default function SettingsPage() {
   const { showSummary, updateShowSummary, enableTranscriptPipeline, updateEnableTranscriptPipeline } = useSummaryPreferences()
@@ -27,6 +28,7 @@ export default function SettingsPage() {
   const [isNewsChannelSaving, setIsNewsChannelSaving] = useState(false)
   const [newsChannelMessage, setNewsChannelMessage] = useState<string>('')
   const [savingStockModeIds, setSavingStockModeIds] = useState<Set<string>>(new Set())
+  const [savingNewsModeIds, setSavingNewsModeIds] = useState<Set<string>>(new Set())
   const [transcriptProviderInfo, setTranscriptProviderInfo] = useState<{ name: string; available: boolean }>({ name: '...', available: false })
   const [summarizerInfo, setSummarizerInfo] = useState<{ name: string; available: boolean }>({ name: '...', available: false })
   const [refreshStatus, setRefreshStatus] = useState<RefreshStatus>({
@@ -159,6 +161,29 @@ export default function SettingsPage() {
     }
   }
 
+  const handleChannelNewsModeChange = async (
+    youtubeChannelId: string,
+    newsMode: ChannelNewsMode
+  ) => {
+    setSavingNewsModeIds(prev => new Set(prev).add(youtubeChannelId))
+    const prevChannels = channels
+    setChannels(prev => prev.map(ch => (
+      ch.youtube_channel_id === youtubeChannelId ? { ...ch, news_mode: newsMode } : ch
+    )))
+    try {
+      const success = await channelRepository.updateNewsMode(youtubeChannelId, newsMode)
+      if (!success) {
+        setChannels(prevChannels)
+      }
+    } finally {
+      setSavingNewsModeIds(prev => {
+        const next = new Set(prev)
+        next.delete(youtubeChannelId)
+        return next
+      })
+    }
+  }
+
   const summarizerStatusText = (() => {
     const name = (summarizerInfo.name || '').toLowerCase()
     if (!summarizerInfo.available) {
@@ -262,7 +287,7 @@ export default function SettingsPage() {
         <div id="channel-stock-mode" className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 max-w-2xl scroll-mt-20">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">채널별 관련주 모드</h2>
           <p className="text-sm text-gray-500 mb-4">
-            auto: 자동 추천, low_stock: 뉴스 우선(종목 최소), off: 관련주 비활성화
+            채널별로 관련주/기사 추천 강도를 직접 제어할 수 있습니다.
           </p>
           {channels.length === 0 ? (
             <p className="text-sm text-gray-400">등록된 채널이 없습니다.</p>
@@ -270,7 +295,9 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {channels.map((channel) => {
                 const stockMode = (channel.stock_mode || 'auto') as ChannelStockMode
-                const isSaving = savingStockModeIds.has(channel.youtube_channel_id)
+                const newsMode = (channel.news_mode || 'auto') as ChannelNewsMode
+                const isSavingStockMode = savingStockModeIds.has(channel.youtube_channel_id)
+                const isSavingNewsMode = savingNewsModeIds.has(channel.youtube_channel_id)
                 return (
                   <div key={channel.youtube_channel_id} className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2">
                     {channel.thumbnail_url ? (
@@ -282,16 +309,34 @@ export default function SettingsPage() {
                       <p className="text-sm font-medium text-gray-800 truncate">{channel.title}</p>
                       <p className="text-xs text-gray-400 truncate">{channel.handle || channel.youtube_channel_id}</p>
                     </div>
-                    <select
-                      value={stockMode}
-                      onChange={(e) => void handleChannelStockModeChange(channel.youtube_channel_id, e.target.value as ChannelStockMode)}
-                      disabled={isSaving}
-                      className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-60"
-                    >
-                      <option value="auto">auto</option>
-                      <option value="low_stock">low_stock</option>
-                      <option value="off">off</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-semibold text-gray-500">관련주 모드</label>
+                        <select
+                          value={stockMode}
+                          onChange={(e) => void handleChannelStockModeChange(channel.youtube_channel_id, e.target.value as ChannelStockMode)}
+                          disabled={isSavingStockMode}
+                          className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-60 min-w-[108px]"
+                        >
+                          <option value="auto">auto</option>
+                          <option value="low_stock">low_stock</option>
+                          <option value="off">off</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-semibold text-gray-500">기사 모드</label>
+                        <select
+                          value={newsMode}
+                          onChange={(e) => void handleChannelNewsModeChange(channel.youtube_channel_id, e.target.value as ChannelNewsMode)}
+                          disabled={isSavingNewsMode}
+                          className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-60 min-w-[108px]"
+                        >
+                          <option value="auto">auto</option>
+                          <option value="strict">strict</option>
+                          <option value="off">off</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 )
               })}

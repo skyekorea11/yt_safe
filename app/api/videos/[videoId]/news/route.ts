@@ -44,6 +44,7 @@ interface TaxonomyContext {
 }
 
 type ChannelStockMode = 'auto' | 'low_stock' | 'off'
+type ChannelNewsMode = 'auto' | 'strict' | 'off'
 
 const VALID_MARKETS = ['KOSPI', 'KOSDAQ', 'NYSE', 'NASDAQ', 'HKEX', 'TSE', 'TWSE'] as const
 const VALID_MARKET_SET = new Set<string>(VALID_MARKETS)
@@ -69,19 +70,30 @@ let taxonomyCache: {
   stockRows: StockExampleRow[]
 } | null = null
 
-async function getChannelStockMode(youtubeChannelId: string): Promise<ChannelStockMode> {
+async function getChannelModes(youtubeChannelId: string): Promise<{
+  stockMode: ChannelStockMode
+  newsMode: ChannelNewsMode
+}> {
   try {
     const { data, error } = await supabase
       .from('channels')
-      .select('stock_mode')
+      .select('stock_mode,news_mode')
       .eq('youtube_channel_id', youtubeChannelId)
       .single()
-    if (error) return 'auto'
-    const mode = data?.stock_mode
-    if (mode === 'off' || mode === 'low_stock' || mode === 'auto') return mode
-    return 'auto'
+    if (error) return { stockMode: 'auto', newsMode: 'auto' }
+    const stockModeRaw = data?.stock_mode
+    const newsModeRaw = data?.news_mode
+    const stockMode: ChannelStockMode =
+      stockModeRaw === 'off' || stockModeRaw === 'low_stock' || stockModeRaw === 'auto'
+        ? stockModeRaw
+        : 'auto'
+    const newsMode: ChannelNewsMode =
+      newsModeRaw === 'off' || newsModeRaw === 'strict' || newsModeRaw === 'auto'
+        ? newsModeRaw
+        : 'auto'
+    return { stockMode, newsMode }
   } catch {
-    return 'auto'
+    return { stockMode: 'auto', newsMode: 'auto' }
   }
 }
 
@@ -1224,7 +1236,7 @@ export async function GET(
     if (!video) {
       return NextResponse.json({ success: false, error: 'Video not found' }, { status: 404 })
     }
-    const channelStockMode = await getChannelStockMode(video.youtube_channel_id)
+    const { stockMode: channelStockMode, newsMode: channelNewsMode } = await getChannelModes(video.youtube_channel_id)
 
     const titleText = (video.title || '').trim()
     const summaryText = (video.summary_text || '').trim()
@@ -1257,17 +1269,23 @@ export async function GET(
     const refreshNews = refreshNewsOnly || forceRefresh
     const hasCachedArticles = Array.isArray(video.related_news) && video.related_news.length > 0
     const cachedStocks = Array.isArray(video.related_stocks) ? (video.related_stocks as StockSuggestion[]) : []
+    const shouldSuppressNewsByChannel = channelNewsMode === 'off'
     const shouldSuppressStocksByChannel = channelStockMode === 'off' || channelStockMode === 'low_stock'
     if (shouldSuppressStocksByChannel && cachedStocks.length > 0) {
       void videoRepository.updateRelatedNews(videoId, (video.related_news as unknown[]) || [], [])
     }
-    if (!forceRefresh && !refreshStocksOnly && !refreshNews && hasCachedArticles && (
+    if (shouldSuppressNewsByChannel && hasCachedArticles) {
+      void videoRepository.updateRelatedNews(videoId, [], shouldSuppressStocksByChannel ? [] : cachedStocks)
+    }
+    if (!forceRefresh && !refreshStocksOnly && !refreshNews && (
+      (shouldSuppressNewsByChannel || hasCachedArticles) && (
       shouldSuppressStocksByChannel || cachedStocks.length >= 3
+      )
     )) {
       return NextResponse.json({
         success: true,
         cached: true,
-        articles: video.related_news,
+        articles: shouldSuppressNewsByChannel ? [] : (video.related_news || []),
         stocks: shouldSuppressStocksByChannel ? [] : cachedStocks,
       })
     }
@@ -1276,12 +1294,14 @@ export async function GET(
     if (refreshStocksOnly) {
       const [geminiStocks, taxonomyStocks] = await Promise.all([stocksPromise, taxonomyStocksPromise])
       const stocks = buildStockCandidates({ titleText, summaryText, geminiStocks, taxonomyStocks, channelStockMode })
-      const articles = hasCachedArticles ? (video.related_news as unknown[]) : []
+      const articles = shouldSuppressNewsByChannel
+        ? []
+        : (hasCachedArticles ? (video.related_news as unknown[]) : [])
       void videoRepository.updateRelatedNews(videoId, articles, stocks)
       return NextResponse.json({
         success: true,
         cached: false,
-        articles,
+        articles: shouldSuppressNewsByChannel ? [] : articles,
         stocks,
       })
     }
@@ -1294,7 +1314,7 @@ export async function GET(
       return NextResponse.json({
         success: true,
         cached: false,
-        articles: video.related_news,
+        articles: shouldSuppressNewsByChannel ? [] : (video.related_news || []),
         stocks,
       })
     }
@@ -1362,7 +1382,7 @@ export async function GET(
 
     let articles: NewsItem[] = []
     let queryUsed = queryCandidates[0]
-    if (!refreshStocksOnly) {
+    if (!refreshStocksOnly && !shouldSuppressNewsByChannel) {
       const collected: NewsItem[] = []
       for (const candidate of queryCandidates.slice(0, 5)) {
         queryUsed = candidate
@@ -1381,7 +1401,7 @@ export async function GET(
     }
 
     // 전체 기사가 0개면 baseText로 마지막 시도
-    if (articles.length === 0 && baseText.length > 0) {
+    if (!shouldSuppressNewsByChannel && articles.length === 0 && baseText.length > 0) {
       const fallback = extractKeywords(baseText, 5).join(' ')
       if (fallback && !querySet.has(fallback)) {
         queryUsed = fallback
@@ -1409,7 +1429,8 @@ export async function GET(
           ...taxonomyTerms,
           ...extractKeywords(queryUsed, 6),
         ])]
-    const minScore = relevanceTerms.length >= 8 ? 2 : 1
+    const minScoreBase = relevanceTerms.length >= 8 ? 2 : 1
+    const minScore = channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase
 
     const scored = articles
       .map(a => {
@@ -1432,7 +1453,9 @@ export async function GET(
         return hasFood
       })
     }
-    articles = relevant
+    articles = shouldSuppressNewsByChannel
+      ? []
+      : relevant
       .slice(0, 8)
       .map(({ _score, ...a }) => {
         void _score

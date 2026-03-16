@@ -110,6 +110,27 @@ export const channelRepository = {
     }
   },
 
+  async updateNewsMode(
+    youtubeChannelId: string,
+    newsMode: 'auto' | 'strict' | 'off'
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('channels')
+        .update({
+          news_mode: newsMode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('youtube_channel_id', youtubeChannelId)
+
+      if (error) throw error
+      return true
+    } catch (error) {
+      console.error('Error updating channel news mode:', error)
+      return false
+    }
+  },
+
   /**
    * Delete channel by YouTube channel ID
    */
