@@ -1016,6 +1016,13 @@ const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'this', 'that', 'from', 'video', 'summary',
 ])
 
+const WEAK_RELEVANCE_TERMS = new Set([
+  '오늘', '이번', '최근', '최신', '화제', '이슈', '분석', '전망', '정리',
+  '공개', '발표', '출시', '논란', '충격', '역사', '횡을', '한획', '기록',
+  '주년', '7주년', '1주년', '2주년', '3주년', '5주년', '10주년',
+  '이유', '근황', '소식',
+])
+
 const NON_INVESTMENT_KEYWORDS = [
   '한국인만몰라요', '한국의잠재력', '국뽕', '지식인초대석', '풀버전',
   '감동', '자부심', '위대함', '정신력', '문화우월', '교양강연',
@@ -1029,6 +1036,32 @@ const INVESTMENT_SIGNAL_KEYWORDS = [
 
 const CARTEL_TERMS = ['담합', '카르텔', '공정위', '공정거래위원회']
 const FOOD_CARTEL_TERMS = ['식품', '밀가루', '설탕', '포도당', '전분당']
+
+function normalizeTerm(term: string): string {
+  return term.toLowerCase().replace(/\s+/g, '')
+}
+
+function isWeakRelevanceTerm(term: string): boolean {
+  const normalized = normalizeTerm(term)
+  if (!normalized || normalized.length < 2) return true
+  if (STOPWORDS.has(normalized) || WEAK_RELEVANCE_TERMS.has(normalized)) return true
+  if (/^\d+$/.test(normalized)) return true
+  if (/^\d+(년|월|일|시|분|초|주년)$/.test(normalized)) return true
+  return false
+}
+
+function dedupeTerms(terms: string[], max = 12): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const term of terms) {
+    const normalized = normalizeTerm(term)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(term)
+    if (out.length >= max) break
+  }
+  return out
+}
 
 function shouldSkipFinancialEnrichment(title: string, summary: string): boolean {
   const text = `${title} ${summary}`.toLowerCase().replace(/\s+/g, '')
@@ -1434,20 +1467,44 @@ export async function GET(
           ...taxonomyTerms,
           ...extractKeywords(queryUsed, 6),
         ])]
+    const strongAnchorTerms = isCartelTopic
+      ? dedupeTerms([
+          ...CARTEL_TERMS,
+          ...(isFoodCartelTopic ? FOOD_CARTEL_TERMS : []),
+          ...extractKeywords(titleText, 8),
+        ], 10)
+      : dedupeTerms(
+          [
+            ...extractKeywords(titleText, 8),
+            ...extractKeywords(summaryText, 6),
+            ...taxonomyTerms,
+          ].filter((term) => !isWeakRelevanceTerm(term)),
+          10
+        )
+
     const minScoreBase = relevanceTerms.length >= 8 ? 2 : 1
     const minScore = channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase
 
     const scored = articles
       .map(a => {
         const normalizedTitle = a.title.toLowerCase().replace(/\s+/g, '')
-        const score = relevanceTerms.filter(term =>
-          normalizedTitle.includes(term.toLowerCase().replace(/\s+/g, ''))
+        const score = relevanceTerms.filter((term) =>
+          normalizedTitle.includes(normalizeTerm(term))
         ).length
-        return { ...a, _score: score }
+        const anchorScore = strongAnchorTerms.filter((term) =>
+          normalizedTitle.includes(normalizeTerm(term))
+        ).length
+        return { ...a, _score: score, _anchorScore: anchorScore }
       })
       .sort((a, b) => b._score - a._score)
 
-    let relevant = scored.filter(a => a._score >= minScore)
+    const minAnchorScore = channelNewsMode === 'strict' ? 2 : 1
+    let relevant = scored.filter((a) => {
+      if (a._score < minScore) return false
+      if (isCartelTopic) return true
+      if (strongAnchorTerms.length === 0) return true
+      return a._anchorScore >= minAnchorScore
+    })
     if (isCartelTopic) {
       relevant = relevant.filter((a) => {
         const t = a.title.toLowerCase().replace(/\s+/g, '')
@@ -1462,8 +1519,9 @@ export async function GET(
       ? []
       : relevant
       .slice(0, 8)
-      .map(({ _score, ...a }) => {
+      .map(({ _score, _anchorScore, ...a }) => {
         void _score
+        void _anchorScore
         return a
       })
 
