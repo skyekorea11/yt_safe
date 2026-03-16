@@ -496,6 +496,171 @@ const SECTOR_RULES: Array<{
     ],
   },
   {
+    sector: 'physics_quantum',
+    keywords: [
+      '물리학', '양자', '양자컴퓨터', '양자암호', '초전도', '양자역학', '입자물리', '핵물리',
+      'quantum', 'qubit', 'particle physics',
+    ],
+    stocks: [
+      { ticker: 'IBM', name: 'IBM', market: 'NYSE' },
+      { ticker: 'GOOGL', name: 'Alphabet', market: 'NASDAQ' },
+      { ticker: 'IONQ', name: 'IonQ', market: 'NYSE' },
+      { ticker: 'RGTI', name: 'Rigetti Computing', market: 'NASDAQ' },
+      { ticker: 'MSFT', name: 'Microsoft', market: 'NASDAQ' },
+      { ticker: '000660', name: 'SK하이닉스', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'chemistry_materials',
+    keywords: [
+      '화학', '유기화학', '무기화학', '촉매', '고분자', '소재화학', '정밀화학',
+      '리튬화학', '전해질', '배터리소재', '신소재화학',
+    ],
+    stocks: [
+      { ticker: '051910', name: 'LG화학', market: 'KOSPI' },
+      { ticker: '011170', name: '롯데케미칼', market: 'KOSPI' },
+      { ticker: '003670', name: '포스코퓨처엠', market: 'KOSPI' },
+      { ticker: '247540', name: '에코프로비엠', market: 'KOSDAQ' },
+      { ticker: 'ALB', name: 'Albemarle', market: 'NYSE' },
+      { ticker: 'SQM', name: 'SQM', market: 'NYSE' },
+    ],
+  },
+  {
+    sector: 'biology_biotech',
+    keywords: [
+      '생물학', '분자생물학', '유전학', '유전자', '유전체', '단백질', '세포생물학',
+      '바이오테크', '합성생물학', 'crispr', 'gene editing',
+    ],
+    stocks: [
+      { ticker: '207940', name: '삼성바이오로직스', market: 'KOSPI' },
+      { ticker: '068270', name: '셀트리온', market: 'KOSPI' },
+      { ticker: '196170', name: '알테오젠', market: 'KOSDAQ' },
+      { ticker: 'VRTX', name: 'Vertex Pharmaceuticals', market: 'NASDAQ' },
+      { ticker: 'REGN', name: 'Regeneron', market: 'NASDAQ' },
+      { ticker: 'CRSP', name: 'CRISPR Therapeutics', market: 'NASDAQ' },
+    ],
+  },
+  {
+    sector: 'neuroscience_medicaltech',
+    keywords: [
+      '신경과학', '뇌과학', '뇌공학', '뇌신호', 'neural', 'bci', 'brain computer interface',
+      '뉴럴링크', '치매연구', '인지과학',
+    ],
+    stocks: [
+      { ticker: 'MDT', name: 'Medtronic', market: 'NYSE' },
+      { ticker: 'ABT', name: 'Abbott Laboratories', market: 'NYSE' },
+      { ticker: 'ISRG', name: 'Intuitive Surgical', market: 'NASDAQ' },
+      { ticker: 'SYK', name: 'Stryker', market: 'NYSE' },
+      { ticker: 'JNJ', name: 'Johnson & Johnson', market: 'NYSE' },
+      { ticker: '207940', name: '삼성바이오로직스', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'earth_science_geology',
+    keywords: [
+      '지구과학', '지질학', '판구조', '지진', '화산', '광물', '희토류',
+      'resource geology', 'earth science',
+    ],
+    stocks: [
+      { ticker: 'FCX', name: 'Freeport-McMoRan', market: 'NYSE' },
+      { ticker: 'RIO', name: 'Rio Tinto', market: 'NYSE' },
+      { ticker: 'BHP', name: 'BHP Group', market: 'NYSE' },
+      { ticker: '005490', name: 'POSCO홀딩스', market: 'KOSPI' },
+      { ticker: '010130', name: '고려아연', market: 'KOSPI' },
+      { ticker: '267250', name: 'HD현대', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'climate_environment',
+    keywords: [
+      '기후변화', '환경과학', '탄소중립', '넷제로', '온실가스', '배출권', '친환경',
+      '재활용기술', '환경규제', 'esg',
+    ],
+    stocks: [
+      { ticker: 'TSLA', name: 'Tesla', market: 'NASDAQ' },
+      { ticker: 'ENPH', name: 'Enphase Energy', market: 'NASDAQ' },
+      { ticker: 'NEE', name: 'NextEra Energy', market: 'NYSE' },
+      { ticker: '009830', name: '한화솔루션', market: 'KOSPI' },
+      { ticker: '373220', name: 'LG에너지솔루션', market: 'KOSPI' },
+      { ticker: '096770', name: 'SK이노베이션', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'energy_nuclear_fusion',
+    keywords: [
+      '핵융합', 'fusion', 'tokamak', '플라즈마', '원자력', 'smr', '소형원전',
+      '핵연료', '전력망',
+    ],
+    stocks: [
+      { ticker: '034020', name: '두산에너빌리티', market: 'KOSPI' },
+      { ticker: '015760', name: '한국전력', market: 'KOSPI' },
+      { ticker: 'BWXT', name: 'BWX Technologies', market: 'NYSE' },
+      { ticker: 'CCJ', name: 'Cameco', market: 'NYSE' },
+      { ticker: 'GEV', name: 'GE Vernova', market: 'NYSE' },
+      { ticker: '6501.T', name: 'Hitachi', market: 'TSE' },
+    ],
+  },
+  {
+    sector: 'robotics_mechatronics',
+    keywords: [
+      '로봇공학', '휴머노이드', '산업로봇', '자율로봇', '메카트로닉스',
+      'robotics', 'robot', '자동화공학',
+    ],
+    stocks: [
+      { ticker: 'TSLA', name: 'Tesla', market: 'NASDAQ' },
+      { ticker: 'ABB', name: 'ABB', market: 'NYSE' },
+      { ticker: 'ISRG', name: 'Intuitive Surgical', market: 'NASDAQ' },
+      { ticker: '6954.T', name: 'Fanuc', market: 'TSE' },
+      { ticker: '6146.T', name: 'Disco', market: 'TSE' },
+      { ticker: '454910', name: '두산로보틱스', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'computer_science_ai',
+    keywords: [
+      '컴퓨터공학', '알고리즘', '인공지능', '머신러닝', '딥러닝', 'llm', '생성ai',
+      '컴파일러', '데이터구조', 'software engineering',
+    ],
+    stocks: [
+      { ticker: 'NVDA', name: 'NVIDIA', market: 'NASDAQ' },
+      { ticker: 'MSFT', name: 'Microsoft', market: 'NASDAQ' },
+      { ticker: 'GOOGL', name: 'Alphabet', market: 'NASDAQ' },
+      { ticker: 'AMZN', name: 'Amazon', market: 'NASDAQ' },
+      { ticker: '035420', name: 'NAVER', market: 'KOSPI' },
+      { ticker: '005930', name: '삼성전자', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'cybersecurity_forensics',
+    keywords: [
+      '정보보안', '사이버보안', '해킹', '백도어', '랜섬웨어', '취약점', '제로데이',
+      '디지털포렌식', 'malware', 'threat intelligence',
+    ],
+    stocks: [
+      { ticker: 'CRWD', name: 'CrowdStrike', market: 'NASDAQ' },
+      { ticker: 'PANW', name: 'Palo Alto Networks', market: 'NASDAQ' },
+      { ticker: 'FTNT', name: 'Fortinet', market: 'NASDAQ' },
+      { ticker: 'ZS', name: 'Zscaler', market: 'NASDAQ' },
+      { ticker: '053800', name: '안랩', market: 'KOSDAQ' },
+      { ticker: '049470', name: 'SGA', market: 'KOSDAQ' },
+    ],
+  },
+  {
+    sector: 'statistics_data_science',
+    keywords: [
+      '통계학', '데이터사이언스', '확률', '회귀분석', '시계열', '계량경제',
+      '모델링', '예측모델', '빅데이터분석',
+    ],
+    stocks: [
+      { ticker: 'PLTR', name: 'Palantir', market: 'NASDAQ' },
+      { ticker: 'SNOW', name: 'Snowflake', market: 'NYSE' },
+      { ticker: 'DDOG', name: 'Datadog', market: 'NASDAQ' },
+      { ticker: 'MDB', name: 'MongoDB', market: 'NASDAQ' },
+      { ticker: '035420', name: 'NAVER', market: 'KOSPI' },
+      { ticker: '035720', name: '카카오', market: 'KOSPI' },
+    ],
+  },
+  {
     sector: 'satellite_telecom',
     keywords: [
       '스페이스x', 'spacex', '스타링크', 'starlink', '위성통신', '위성네트워크',
