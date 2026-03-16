@@ -107,7 +107,7 @@ export default function TopNav({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end text-slate-700 px-1 py-0.5">
+            <div className="hidden sm:flex flex-col items-end text-slate-700 px-1 py-0.5">
               <span className="text-[10px] font-bold tracking-wide leading-none">갱신까지</span>
               <span className="text-sm font-bold tabular-nums leading-tight tracking-tight">{countdown || '--:--:--'}</span>
             </div>
@@ -115,11 +115,11 @@ export default function TopNav({
               <button
                 onClick={handleManualRefresh}
                 disabled={isRefreshing || cooldownActive}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+                className="inline-flex items-center justify-center w-9 h-9 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 gap-0 sm:gap-1.5 rounded-lg border border-slate-300 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-40 transition-colors"
                 title={cooldownActive ? '1분 후 다시 시도 가능' : '지금 새로고침'}
               >
                 <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-                갱신
+                <span className="hidden sm:inline">갱신</span>
               </button>
             )}
             <button

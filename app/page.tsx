@@ -166,17 +166,14 @@ export default function DashboardPage() {
     return date.toLocaleDateString('ko-KR')
   }
 
-  const formatRelativeTime = (value: string) => {
+  const formatTimeHHmm = (value: string) => {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return ''
-    const diffMs = Date.now() - date.getTime()
-    const diffMin = Math.floor(diffMs / 60000)
-    if (diffMin < 1) return 'just now'
-    if (diffMin < 60) return `${diffMin}m ago`
-    const diffHour = Math.floor(diffMin / 60)
-    if (diffHour < 24) return `${diffHour}hr ago`
-    const diffDay = Math.floor(diffHour / 24)
-    return `${diffDay}d ago`
+    return date.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
   }
 
   const newsTimeBadgeClass = (position: number, total: number) => {
@@ -436,33 +433,35 @@ export default function DashboardPage() {
   }
 
   const renderVideoDetail = (video: Video) => (
-    <div className="space-y-5">
+    <div className="space-y-3.5">
       {(() => {
         const mobileNewsOpen = mobileDetailPanels[video.youtube_video_id]?.news ?? false
         const mobileStocksOpen = mobileDetailPanels[video.youtube_video_id]?.stocks ?? false
         return (
           <>
       <div className="flex items-start justify-between gap-3 pb-1 border-b border-gray-100">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 leading-snug">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-bold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem]">
             {video.title}
           </h2>
-          {isNewVideo(video) && (
-            <div className="mt-1 flex items-center gap-1.5 text-xs">
+          <div className="mt-1 flex items-center gap-1.5 text-xs min-h-[1rem]">
+            {isNewVideo(video) && (
               <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-semibold">New</span>
-              <span className="text-gray-500">
-                {new Date(video.created_at).toLocaleString('ko-KR', {
-                  year: 'numeric', month: '2-digit', day: '2-digit',
-                  hour: '2-digit', minute: '2-digit', second: '2-digit',
-                })}
-              </span>
-            </div>
-          )}
+            )}
+            <span className="text-gray-500">
+              {new Date(video.created_at).toLocaleString('ko-KR', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+              })}
+            </span>
+          </div>
         </div>
         <button
           onClick={() => toggleFavorite(video.youtube_video_id)}
           disabled={togglingIds.has(video.youtube_video_id)}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          title={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          aria-label={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
         >
           <Heart
             size={14}
@@ -470,11 +469,10 @@ export default function DashboardPage() {
               ? 'text-red-400 fill-red-400'
               : 'text-gray-300'}
           />
-          {favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기'}
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         <div className="border border-gray-200 rounded-xl overflow-hidden">
           <iframe
             src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
@@ -650,7 +648,7 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center gap-1.5">
                         {stock.is_core && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-white">핵심</span>
+                          <span className="inline-flex items-center shrink-0 whitespace-nowrap text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-white">핵심</span>
                         )}
                           <span className="text-sm font-medium text-gray-900">{stock.name}</span>
                       </div>
@@ -825,8 +823,8 @@ export default function DashboardPage() {
                       className="block rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
-                          {formatRelativeTime(item.publishedAt)}
+                        <span className={`inline-flex w-10 justify-center px-1 py-0.5 rounded text-[10px] font-semibold tabular-nums leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
+                          {formatTimeHHmm(item.publishedAt)}
                         </span>
                         <p className="text-[13px] font-medium text-gray-800 line-clamp-1 flex-1 min-w-0">{item.title}</p>
                       </div>
@@ -850,8 +848,8 @@ export default function DashboardPage() {
                       className="block rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
-                          {formatRelativeTime(item.publishedAt)}
+                        <span className={`inline-flex w-10 justify-center px-1 py-0.5 rounded text-[10px] font-semibold tabular-nums leading-none whitespace-nowrap ${newsTimeBadgeClass(idx, arr.length)}`}>
+                          {formatTimeHHmm(item.publishedAt)}
                         </span>
                         <p className="text-[13px] font-medium text-gray-800 line-clamp-1 flex-1 min-w-0">{item.title}</p>
                       </div>
