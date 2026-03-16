@@ -401,6 +401,11 @@ const LOW_STOCK_TOPIC_KEYWORDS = [
   '원조효과', '거버넌스', '제도경제학', '부패', '원조피로', '역사를보다',
 ]
 
+const HUMANITIES_LOW_STOCK_KEYWORDS = [
+  '철학', '철학을보다', '행복의기원', '행복', '삶의의미', '윤리학', '인문학',
+  '고대사상', '인간본성', '사유', '존재론', '형이상학', '도덕철학',
+]
+
 function ensureMinStocks(stocks: StockSuggestion[], minCount = 6): StockSuggestion[] {
   if (stocks.length === 0 || stocks.length >= minCount) return stocks
 
@@ -930,6 +935,7 @@ function buildStockCandidates(params: {
   const baseText = `${titleText} ${summaryText}`.trim()
   const normalized = baseText.toLowerCase().replace(/\s+/g, '')
   const isLowStockTopic = LOW_STOCK_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
+  const isHumanitiesLowStockTopic = HUMANITIES_LOW_STOCK_KEYWORDS.some((kw) => normalized.includes(kw))
   const isScienceTopic = SCIENCE_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
   const isStarlinkTelecomTopic =
     ['스타링크', 'starlink', '스페이스x', 'spacex', '위성통신', '위성네트워크', '버라이즌', 'verizon', 'at&t', 'att', 'atnt', '통신업계']
@@ -941,7 +947,7 @@ function buildStockCandidates(params: {
     ? findRelatedStocks(baseText, isStarlinkTelecomTopic ? 6 : 3)
     : []
 
-  if (isLowStockTopic) {
+  if (isLowStockTopic || isHumanitiesLowStockTopic) {
     // 국제개발/거버넌스형 콘텐츠는 특정 종목 매핑 신뢰도가 낮아 종목 추천을 비활성화한다.
     return []
   }
