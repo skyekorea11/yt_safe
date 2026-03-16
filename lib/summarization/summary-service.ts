@@ -8,6 +8,10 @@ import { buildHeuristicSummary, chunkTranscript, cleanTranscript, ensureKoreanSu
  */
 
 export const summaryService = {
+  isExternalSummaryPreferred(): boolean {
+    return (process.env.EXTERNAL_SUMMARY_PRIORITY || 'true').toLowerCase() !== 'false'
+  },
+
   isChunkedSummarizationEnabled(): boolean {
     return (process.env.CHUNK_SUMMARY_ENABLED || 'true').toLowerCase() !== 'false'
   },
@@ -60,8 +64,28 @@ export const summaryService = {
       '콘텐츠를 준비 중',
       '오류가 발생했습니다',
       'loading',
+      '유튜브 영상의 자막과 스크립트를 쉽게 추출하고 복사',
+      '로그인',
+      '회원가입',
+      '무료로 시작',
+      '서비스 소개',
     ]
     return badPhrases.some((phrase) => normalized.includes(phrase))
+  },
+
+  isRelevantToVideo(text: string, title: string, description: string): boolean {
+    const source = `${title || ''} ${description || ''}`.toLowerCase()
+    const candidate = text.toLowerCase()
+    const tokens = source
+      .replace(/[^0-9a-z가-힣\s]/gi, ' ')
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2)
+      .filter((t) => !/^(the|and|for|with|this|that|영상|유튜브|채널|뉴스|대한|에서|으로|하는|입니다)$/.test(t))
+
+    if (tokens.length === 0) return true
+    const overlap = tokens.filter((token) => candidate.includes(token))
+    return overlap.length >= Math.min(2, Math.max(1, Math.floor(tokens.length * 0.12)))
   },
 
   async fetchSummarizeTechSummary(videoId: string): Promise<string | null> {
@@ -99,13 +123,10 @@ export const summaryService = {
     if ((process.env.BRIEFYOU_FALLBACK || 'true').toLowerCase() === 'false') return null
 
     const candidates = [
+      // 사이트 안내된 asd 도메인 패턴 (가장 우선)
+      `https://www.youtubeasd.com/watch?v=${videoId}`,
       // 공식 결과 페이지 패턴
       `https://briefyou.co.kr/youtube-analysis-result/${videoId}`,
-      // 사이트 안내된 "링크 뒤 asd 추가" 패턴 대응
-      `https://www.youtube.com/watch?v=${videoId}asd`,
-      `https://youtube.com/watch?v=${videoId}asd`,
-      // 기존 호환 경로 유지
-      `https://www.youtubeasd.com/watch?v=${videoId}`,
     ]
 
     for (const url of candidates) {
@@ -144,6 +165,11 @@ export const summaryService = {
     const formatted = formatSummaryText(external, 3)
     const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 3) || formatted
     if (!ensured) return null
+    if (this.isLowQualityExternalSummary(ensured)) return null
+    if (!this.isRelevantToVideo(ensured, title, description)) {
+      console.warn(`[summary] external summary rejected as irrelevant: ${videoId}`)
+      return null
+    }
 
     await videoRepository.updateSummary(videoId, ensured, 'external', 'complete')
     return { text: ensured, sourceType: 'external' }
@@ -235,6 +261,7 @@ export const summaryService = {
   ): Promise<{ text: string; sourceType: 'transcript' | 'description' | 'external' } | null> {
     try {
       const allowDescriptionFallback = this.isDescriptionFallbackEnabled()
+      const preferExternal = this.isExternalSummaryPreferred()
       const fallbackToDescription = async () => {
         const external = await this.generateExternalSummary(videoId, title, description)
         if (external) return external
@@ -244,6 +271,12 @@ export const summaryService = {
         const message = '자막/외부 요약을 확보하지 못했습니다'
         await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
         return { text: message, sourceType: 'transcript' as const }
+      }
+
+      // Prefer external summaries (briefyou -> summarize.tech) before transcript pipeline when enabled.
+      if (preferExternal) {
+        const externalFirst = await this.generateExternalSummary(videoId, title, description)
+        if (externalFirst) return externalFirst
       }
 
       const transcriptProvider = getTranscriptProvider()
@@ -352,46 +385,45 @@ export const summaryService = {
         await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
         return { text: message, sourceType: 'transcript' }
       }
-
-      const summarizer = getLocalSummarizer()
-
-      if (!summarizer.isAvailable()) {
-        console.warn('[summary] summarizer not available')
-        const message = '요약 서비스를 사용할 수 없습니다'
-        await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
-        return { text: message, sourceType: 'transcript' }
-      }
-
-      console.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
-
+      const contextVideo = await videoRepository.getByYouTubeId(videoId)
       let summary: string | null = null
-      const shouldChunk =
-        this.isChunkedSummarizationEnabled() &&
-        cleanedTranscript.length >= this.chunkSummarizationThreshold()
 
-      if (shouldChunk) {
-        const chunks = chunkTranscript(cleanedTranscript, this.chunkSize()).slice(0, this.chunkLimit())
-        const chunkSummaries: string[] = []
+      let summarizer: ReturnType<typeof getLocalSummarizer> | null = null
+      if (!summary) {
+        summarizer = getLocalSummarizer()
+        if (summarizer.isAvailable()) {
+          console.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
+          const shouldChunk =
+            this.isChunkedSummarizationEnabled() &&
+            cleanedTranscript.length >= this.chunkSummarizationThreshold()
 
-        for (const chunk of chunks) {
-          const partial = await summarizer.summarize(chunk, 160)
-          if (partial) {
-            chunkSummaries.push(formatSummaryText(partial, 2))
+          if (shouldChunk) {
+            const chunks = chunkTranscript(cleanedTranscript, this.chunkSize()).slice(0, this.chunkLimit())
+            const chunkSummaries: string[] = []
+
+            for (const chunk of chunks) {
+              const partial = await summarizer.summarize(chunk, 160)
+              if (partial) {
+                chunkSummaries.push(formatSummaryText(partial, 2))
+              } else {
+                chunkSummaries.push(formatSummaryText(buildHeuristicSummary(chunk, 2), 2))
+              }
+            }
+
+            const mergedChunkSummary = chunkSummaries.join('\n')
+            summary = await summarizer.summarize(mergedChunkSummary, 220)
+            if (!summary) {
+              summary = formatSummaryText(mergedChunkSummary, 3)
+            }
           } else {
-            chunkSummaries.push(formatSummaryText(buildHeuristicSummary(chunk, 2), 2))
+            summary = await summarizer.summarize(cleanedTranscript, 200)
           }
+        } else {
+          console.warn('[summary] summarizer not available')
         }
-
-        const mergedChunkSummary = chunkSummaries.join('\n')
-        summary = await summarizer.summarize(mergedChunkSummary, 220)
-        if (!summary) {
-          summary = formatSummaryText(mergedChunkSummary, 3)
-        }
-      } else {
-        summary = await summarizer.summarize(cleanedTranscript, 200)
       }
 
-      if (!summary && !(summarizer instanceof HeuristicTranscriptSummarizer)) {
+      if (!summary && summarizer && !(summarizer instanceof HeuristicTranscriptSummarizer)) {
         console.warn('[summary] primary summarizer failed, falling back to heuristic transcript summary')
         summary = await new HeuristicTranscriptSummarizer().summarize(cleanedTranscript, 200)
       }
@@ -404,10 +436,9 @@ export const summaryService = {
         formattedSummaryRaw.split('\n').filter(Boolean).length >= 2
           ? formattedSummaryRaw
           : formatSummaryText(`${formattedSummaryRaw}\n${heuristicSummary}`, 3)
-      const video = await videoRepository.getByYouTubeId(videoId)
       const formattedSummary = ensureKoreanSummary(
         robustSummaryRaw,
-        `${video?.title || ''} ${video?.description || ''} ${cleanedTranscript.slice(0, 500)}`,
+        `${contextVideo?.title || ''} ${contextVideo?.description || ''} ${cleanedTranscript.slice(0, 500)}`,
         3
       )
 
@@ -419,7 +450,7 @@ export const summaryService = {
         const fallbackFromDescriptionRaw = heuristicSummary
         const fallbackFromDescription = ensureKoreanSummary(
           fallbackFromDescriptionRaw,
-          `${video?.title || ''} ${video?.description || ''}`,
+          `${contextVideo?.title || ''} ${contextVideo?.description || ''}`,
           3
         )
 

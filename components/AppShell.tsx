@@ -15,8 +15,8 @@ const NAV_ITEMS = [
 ] as const
 
 const SETTINGS_MENU = [
-  { label: '뉴스 채널', href: '/settings#news-channels' },
-  { label: '채널별 관련주', href: '/settings#channel-stock-mode' },
+  { label: '뉴스 채널 관리', href: '/settings#news-channels' },
+  { label: '채널별 기사/주식 추천 강도', href: '/settings#channel-stock-mode' },
   { label: '표시 설정', href: '/settings#display-preferences' },
 ] as const
 
@@ -113,6 +113,10 @@ function SidebarContent({
 
       {isSettingsPage ? (
         <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="mb-4 pb-4 border-b border-slate-200/70">
+            <p className="px-1 mb-2 text-[11px] font-medium text-slate-500">채널 추가</p>
+            <ChannelAddForm onSuccess={onChannelAdded} compact />
+          </div>
           <div className="space-y-1.5">
             {SETTINGS_MENU.map((item) => (
               <Link
@@ -220,11 +224,6 @@ function SidebarContent({
                         <div className="font-medium text-[13px] text-slate-800 truncate">
                           {channel.title}
                         </div>
-                        {channel.handle ? (
-                          <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                            {channel.handle}
-                          </div>
-                        ) : null}
                       </div>
                       <span
                         className="inline-flex items-center justify-center text-slate-300 flex-shrink-0"

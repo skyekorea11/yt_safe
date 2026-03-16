@@ -6,7 +6,8 @@ export interface Channel {
   id: string;
   youtube_channel_id: string;
   title: string;
-  stock_mode?: 'auto' | 'low_stock' | 'off';
+  channel_group?: 'news' | 'finance' | 'real_estate' | 'tech' | 'lifestyle' | 'etc' | null;
+  stock_mode?: 'auto' | 'strict' | 'off' | 'low_stock';
   news_mode?: 'auto' | 'strict' | 'off';
   handle: string;
   description: string;

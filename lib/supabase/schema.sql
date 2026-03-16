@@ -27,6 +27,9 @@ ALTER TABLE public.channels
 ALTER TABLE public.channels
   ADD COLUMN IF NOT EXISTS news_mode TEXT NOT NULL DEFAULT 'auto';
 
+ALTER TABLE public.channels
+  ADD COLUMN IF NOT EXISTS channel_group TEXT;
+
 -- Create videos table
 CREATE TABLE IF NOT EXISTS public.videos (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

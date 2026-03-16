@@ -43,7 +43,7 @@ interface TaxonomyContext {
   taxonomyId: string
 }
 
-type ChannelStockMode = 'auto' | 'low_stock' | 'off'
+type ChannelStockMode = 'auto' | 'strict' | 'off' | 'low_stock'
 type ChannelNewsMode = 'auto' | 'strict' | 'off'
 
 const VALID_MARKETS = ['KOSPI', 'KOSDAQ', 'NYSE', 'NASDAQ', 'HKEX', 'TSE', 'TWSE'] as const
@@ -84,7 +84,7 @@ async function getChannelModes(youtubeChannelId: string): Promise<{
     const stockModeRaw = data?.stock_mode
     const newsModeRaw = data?.news_mode
     const stockMode: ChannelStockMode =
-      stockModeRaw === 'off' || stockModeRaw === 'low_stock' || stockModeRaw === 'auto'
+      stockModeRaw === 'off' || stockModeRaw === 'low_stock' || stockModeRaw === 'strict' || stockModeRaw === 'auto'
         ? stockModeRaw
         : 'auto'
     const newsMode: ChannelNewsMode =
@@ -248,6 +248,13 @@ const STOCK_KEYWORD_MAP: Array<{
   { keywords: ['건축가', '건축', '도서관', '공공건축', '공간디자인', '리모델링', '설계'], ticker: '000720', name: '현대건설', market: 'KOSPI' },
   { keywords: ['한국전통', '전통건축', '한옥', '문화공간', '전통재해석', '한국미'], ticker: '009240', name: '한샘', market: 'KOSPI' },
   { keywords: ['도시개발', '복합개발', '개발사업'], ticker: '294870', name: 'HDC현대산업개발', market: 'KOSPI' },
+  // 주거 / 부동산 이주
+  { keywords: ['부동산', '주택', '집값', '아파트', '청약', '분양', '재개발', '재건축', '전세', '월세', '이사', '인서울', '탈서울', '경기도'], ticker: '000720', name: '현대건설', market: 'KOSPI' },
+  { keywords: ['주거', '인테리어', '리모델링', '신혼집', '이사가구'], ticker: '009240', name: '한샘', market: 'KOSPI' },
+  { keywords: ['창호', '리모델링자재', '건자재', '주택개보수'], ticker: '108670', name: 'LX하우시스', market: 'KOSPI' },
+  { keywords: ['주택공급', '도시정비', '재개발', '재건축', '복합개발'], ticker: '294870', name: 'HDC현대산업개발', market: 'KOSPI' },
+  { keywords: ['건설주', '주택경기', '수도권공급', '신도시'], ticker: '006360', name: 'GS건설', market: 'KOSPI' },
+  { keywords: ['건설사', '주택사업', '분양시장', '주거수요'], ticker: '375500', name: 'DL이앤씨', market: 'KOSPI' },
   // 명품 / 럭셔리 리테일
   { keywords: ['명품', '럭셔리', '하이엔드', '명품매장', '브랜드매장', '프리미엄브랜드'], ticker: 'TPR', name: 'Tapestry', market: 'NYSE' },
   { keywords: ['백화점명품', '명품관', '럭셔리유통', '신세계백화점'], ticker: '004170', name: '신세계', market: 'KOSPI' },
@@ -506,6 +513,22 @@ const SECTOR_RULES: Array<{
       { ticker: '089590', name: '제주항공', market: 'KOSPI' },
       { ticker: '272450', name: '진에어', market: 'KOSPI' },
       { ticker: '008770', name: '호텔신라', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'real_estate_housing',
+    keywords: [
+      '부동산', '주택', '집값', '아파트', '청약', '분양', '재개발', '재건축',
+      '전세', '월세', '이사', '인서울', '탈서울', '서울집값', '경기도이사', '수도권이주',
+      '주거이동', '주거수요', '주택공급',
+    ],
+    stocks: [
+      { ticker: '000720', name: '현대건설', market: 'KOSPI' },
+      { ticker: '006360', name: 'GS건설', market: 'KOSPI' },
+      { ticker: '375500', name: 'DL이앤씨', market: 'KOSPI' },
+      { ticker: '294870', name: 'HDC현대산업개발', market: 'KOSPI' },
+      { ticker: '009240', name: '한샘', market: 'KOSPI' },
+      { ticker: '108670', name: 'LX하우시스', market: 'KOSPI' },
     ],
   },
   {
@@ -945,16 +968,22 @@ function prioritizeCoreByTitle(stocks: StockSuggestion[], title: string): StockS
   const isChinaRobotTopic =
     (['중국', 'china', '중국산'].some(kw => normalizedTitle.includes(kw))) &&
     (['로봇', '휴머노이드', '산업로봇', '공장자동화', '자동화'].some(kw => normalizedTitle.includes(kw)))
+  const isHousingMigrationTopic =
+    ['부동산', '주택', '아파트', '전세', '월세', '청약', '분양', '재건축', '재개발', '이사', '인서울', '탈서울', '경기도']
+      .some(kw => normalizedTitle.includes(kw))
 
-  if (!isOverseasMilkTeaTopic && !isFoodCartelTopic && !isStarlinkTelecomTopic && !isGeopoliticsDefenseTopic && !isChinaRobotTopic) return stocks
+  if (!isOverseasMilkTeaTopic && !isFoodCartelTopic && !isStarlinkTelecomTopic && !isGeopoliticsDefenseTopic && !isChinaRobotTopic && !isHousingMigrationTopic) return stocks
 
   const foreignPriority = ['2150.HK', '9633.HK', '2587.T', '1216.TW', 'KO', 'PEP', 'SBUX']
   const foodCartelPriority = ['097950', '001130', '145990', '271560', '280360', '004370']
   const starlinkTelecomPriority = ['RKLB', 'ASTS', 'IRDM', 'VZ', 'T', 'TMUS', '017670', '030200']
   const geopoliticsDefensePriority = ['012450', '079550', '047810', '103140', 'LMT', 'RTX']
   const chinaRobotPriority = ['9880.HK', '1810.HK', '1211.HK', '454910', '6954.T', 'ABB', 'TSLA']
+  const housingMigrationPriority = ['000720', '006360', '375500', '294870', '009240', '108670', '105560']
   const priority = isChinaRobotTopic
     ? chinaRobotPriority
+    : isHousingMigrationTopic
+    ? housingMigrationPriority
     : isGeopoliticsDefenseTopic
     ? geopoliticsDefensePriority
     : isStarlinkTelecomTopic
@@ -992,7 +1021,7 @@ function buildStockCandidates(params: {
   if (channelStockMode === 'off') return []
   const isLowStockTopic = LOW_STOCK_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
   const isHumanitiesLowStockTopic = HUMANITIES_LOW_STOCK_KEYWORDS.some((kw) => normalized.includes(kw))
-  const isChannelLowStockTopic = channelStockMode === 'low_stock'
+  const isChannelLowStockTopic = channelStockMode === 'low_stock' || channelStockMode === 'strict'
   const isScienceTopic = SCIENCE_TOPIC_KEYWORDS.some((kw) => normalized.includes(kw))
   const isStarlinkTelecomTopic =
     ['스타링크', 'starlink', '스페이스x', 'spacex', '위성통신', '위성네트워크', '버라이즌', 'verizon', 'at&t', 'att', 'atnt', '통신업계']
@@ -1060,6 +1089,10 @@ const INVESTMENT_SIGNAL_KEYWORDS = [
 
 const CARTEL_TERMS = ['담합', '카르텔', '공정위', '공정거래위원회']
 const FOOD_CARTEL_TERMS = ['식품', '밀가루', '설탕', '포도당', '전분당']
+const HOUSING_MIGRATION_TERMS = [
+  '부동산', '주택', '아파트', '전세', '월세', '청약', '분양', '재건축', '재개발',
+  '이사', '인서울', '탈서울', '경기도', '수도권', '주거이동', '주택공급',
+]
 
 function normalizeTerm(term: string): string {
   return term.toLowerCase().replace(/\s+/g, '')
@@ -1353,7 +1386,8 @@ export async function GET(
     const hasCachedArticles = Array.isArray(video.related_news) && video.related_news.length > 0
     const cachedStocks = Array.isArray(video.related_stocks) ? (video.related_stocks as StockSuggestion[]) : []
     const shouldSuppressNewsByChannel = channelNewsMode === 'off'
-    const shouldSuppressStocksByChannel = channelStockMode === 'off' || channelStockMode === 'low_stock'
+    const shouldSuppressStocksByChannel =
+      channelStockMode === 'off' || channelStockMode === 'low_stock' || channelStockMode === 'strict'
     if (shouldSuppressStocksByChannel && cachedStocks.length > 0) {
       void videoRepository.updateRelatedNews(videoId, (video.related_news as unknown[]) || [], [])
     }
@@ -1431,6 +1465,7 @@ export async function GET(
     const isStarlinkTelecomTopic =
       ['스타링크', 'starlink', '스페이스x', 'spacex', '위성통신', '위성네트워크', '버라이즌', 'verizon', 'at&t', 'att', 'atnt', '통신업계']
         .some(kw => normalizedBase.includes(kw))
+    const isHousingMigrationTopic = HOUSING_MIGRATION_TERMS.some((kw) => normalizedBase.includes(kw))
     if (isCartelTopic) {
       querySet.add('공정거래위원회 담합')
       querySet.add('가격 담합 과징금')
@@ -1445,13 +1480,21 @@ export async function GET(
       querySet.add('스페이스X 스타링크 통신업계')
       querySet.add('Verizon AT&T Starlink competition')
     }
+    if (isHousingMigrationTopic) {
+      querySet.add('서울 경기 이사 수요')
+      querySet.add('인서울 탈서울 주거 이동')
+      querySet.add('수도권 주택 공급 아파트 분양')
+      querySet.add('전세 월세 주택시장')
+    }
     let queryCandidates = [...querySet].filter(Boolean)
-    if (isCartelTopic || isStarlinkTelecomTopic) {
+    if (isCartelTopic || isStarlinkTelecomTopic || isHousingMigrationTopic) {
       const priority = isFoodCartelTopic
         ? ['공정거래위원회 식품 담합', '밀가루 설탕 포도당 담합', '식품 원재료 가격 담합', '공정거래위원회 담합', '가격 담합 과징금']
-        : (isStarlinkTelecomTopic
-          ? ['스타링크 위성통신 경쟁', '스페이스X 스타링크 통신업계', 'Verizon AT&T Starlink competition']
-          : ['공정거래위원회 담합', '가격 담합 과징금'])
+        : (isHousingMigrationTopic
+          ? ['서울 경기 이사 수요', '인서울 탈서울 주거 이동', '수도권 주택 공급 아파트 분양', '전세 월세 주택시장']
+          : (isStarlinkTelecomTopic
+            ? ['스타링크 위성통신 경쟁', '스페이스X 스타링크 통신업계', 'Verizon AT&T Starlink competition']
+            : ['공정거래위원회 담합', '가격 담합 과징금']))
       const prioritized = [...priority, ...queryCandidates]
       const deduped: string[] = []
       const seen = new Set<string>()
@@ -1515,6 +1558,12 @@ export async function GET(
           ...(isFoodCartelTopic ? FOOD_CARTEL_TERMS : []),
           ...extractKeywords(queryUsed, 6),
         ])]
+      : isHousingMigrationTopic
+      ? [...new Set([
+          ...HOUSING_MIGRATION_TERMS,
+          ...extractKeywords(baseText, 10),
+          ...extractKeywords(queryUsed, 6),
+        ])]
       : [...new Set([
           ...extractKeywords(baseText, 12),
           ...taxonomyTerms,
@@ -1526,6 +1575,12 @@ export async function GET(
           ...(isFoodCartelTopic ? FOOD_CARTEL_TERMS : []),
           ...extractKeywords(titleText, 8),
         ], 10)
+      : isHousingMigrationTopic
+      ? dedupeTerms([
+          ...HOUSING_MIGRATION_TERMS,
+          ...extractKeywords(titleText, 8),
+          ...extractKeywords(summaryText, 4),
+        ], 10)
       : dedupeTerms(
           [
             ...extractKeywords(titleText, 8),
@@ -1534,10 +1589,12 @@ export async function GET(
           ].filter((term) => !isWeakRelevanceTerm(term)),
           10
         )
-    const entityAnchorTerms = isCartelTopic ? [] : dedupeTerms(extractEntityAnchorTerms(titleText, 6), 6)
+    const entityAnchorTerms = (isCartelTopic || isHousingMigrationTopic) ? [] : dedupeTerms(extractEntityAnchorTerms(titleText, 6), 6)
 
     const minScoreBase = relevanceTerms.length >= 8 ? 2 : 1
-    const minScore = channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase
+    const minScore = isHousingMigrationTopic
+      ? 1
+      : (channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase)
 
     const scored = articles
       .map(a => {
@@ -1552,14 +1609,14 @@ export async function GET(
       })
       .sort((a, b) => b._score - a._score)
 
-    const minAnchorScore = channelNewsMode === 'strict' ? 2 : 1
+    const minAnchorScore = isHousingMigrationTopic ? 0 : (channelNewsMode === 'strict' ? 2 : 1)
     let relevant = scored.filter((a) => {
       if (a._score < minScore) return false
-      if (isCartelTopic) return true
+      if (isCartelTopic || isHousingMigrationTopic) return true
       if (strongAnchorTerms.length === 0) return true
       return a._anchorScore >= minAnchorScore
     })
-    if (!isCartelTopic && entityAnchorTerms.length > 0) {
+    if (!isCartelTopic && !isHousingMigrationTopic && entityAnchorTerms.length > 0) {
       relevant = relevant.filter((a) => {
         const t = a.title.toLowerCase().replace(/\s+/g, '')
         return entityAnchorTerms.some((term) => t.includes(term))
@@ -1574,6 +1631,10 @@ export async function GET(
         const hasFood = FOOD_CARTEL_TERMS.some(k => t.includes(k))
         return hasFood
       })
+    }
+    if (isHousingMigrationTopic && relevant.length === 0 && scored.length > 0) {
+      // 주거이동 토픽은 매체별 표현 편차가 커서 점수 0~1 기사도 상위 일부 허용
+      relevant = scored.filter((a) => a._score >= 1).slice(0, 8)
     }
     articles = shouldSuppressNewsByChannel
       ? []

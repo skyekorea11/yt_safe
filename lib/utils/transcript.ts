@@ -130,6 +130,10 @@ function postprocessSummarySentence(sentence: string): string {
 
   // Strip inline bullet symbols that may come from model output.
   out = out.replace(/[✔✓☑][️︎]?\s*/g, ' ')
+  out = out.replace(/>>+/g, ' ')
+  out = out.replace(/<<+/g, ' ')
+  out = out.replace(/^\s*>+\s*/g, '')
+  out = out.replace(/\s*>+\s*/g, ' ')
 
   // Basic punctuation/spacing normalization.
   out = out

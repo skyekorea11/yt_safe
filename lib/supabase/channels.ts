@@ -91,7 +91,7 @@ export const channelRepository = {
 
   async updateStockMode(
     youtubeChannelId: string,
-    stockMode: 'auto' | 'low_stock' | 'off'
+    stockMode: 'auto' | 'strict' | 'off' | 'low_stock'
   ): Promise<boolean> {
     try {
       const { error } = await supabase
@@ -128,6 +128,45 @@ export const channelRepository = {
     } catch (error) {
       console.error('Error updating channel news mode:', error)
       return false
+    }
+  },
+
+  async updateChannelGroup(
+    youtubeChannelId: string,
+    channelGroup: 'news' | 'finance' | 'real_estate' | 'tech' | 'lifestyle' | 'etc' | null
+  ): Promise<{ success: boolean; reason?: 'missing_column' | 'error'; message?: string }> {
+    try {
+      const { error } = await supabase
+        .from('channels')
+        .update({
+          channel_group: channelGroup,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('youtube_channel_id', youtubeChannelId)
+
+      if (error) throw error
+      return { success: true }
+    } catch (error) {
+      let message = '채널 분류 업데이트에 실패했습니다.'
+      let reason: 'missing_column' | 'error' = 'error'
+      if (error && typeof error === 'object') {
+        const e = error as { message?: string; details?: string; code?: string }
+        if (typeof e.message === 'string' && e.message.trim()) {
+          message = e.message
+        }
+        const lower = `${e.message || ''} ${e.details || ''}`.toLowerCase()
+        if (e.code === 'PGRST204' || lower.includes('channel_group') || lower.includes('column')) {
+          reason = 'missing_column'
+        }
+        try {
+          console.error(
+            'Error updating channel group serialized:',
+            JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+          )
+        } catch {}
+      }
+      console.error('Error updating channel group:', error)
+      return { success: false, reason, message }
     }
   },
 

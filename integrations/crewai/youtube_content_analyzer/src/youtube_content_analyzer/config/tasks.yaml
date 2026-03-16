@@ -1,0 +1,25 @@
+---
+extract_youtube_video_information:
+  description: 'Extract comprehensive metadata and information from the provided YouTube
+    video URL: {youtube_url}. This includes video title, description, duration, channel
+    information, upload date, and video ID. Ensure the URL is properly parsed and
+    handle any errors gracefully. Provide structured output that can be used for further
+    content analysis.'
+  expected_output: A detailed JSON report containing video metadata including title,
+    description, duration, channel name, upload date, video ID, and success status.
+    If extraction fails, provide clear error information and troubleshooting guidance.
+  agent: youtube_video_analyzer
+summarize_video_content:
+  description: "추출된 메타데이터와 제공된 자막 내용을 바탕으로 비디오 콘텐츠를 분석하고 요약합니다: {transcript_content}.
+    \n\n**자막 추출 방법:**\n1. yt-dlp 사용 (권장): `yt-dlp --write-subs --write-auto-subs --sub-langs
+    \"ko,en\" --skip-download {youtube_url}`\n2. 브라우저 확장 프로그램으로 수동 추출\n3. YouTube
+    자동 생성 자막 복사\n\n다음 항목들을 포함하는 종합적인 요약을 작성합니다:\n\n1. **비디오 개요**: 비디오의 간단한 설명과 목적\n2.
+    **주요 주제**: 다뤄지는 주요 테마와 주제들\n3. **핵심 포인트**: 중요한 정보와 인사이트\n4. **대상 청중**: 이 콘텐츠로부터
+    도움을 받을 수 있는 사람들\n5. **콘텐츠 구조**: 정보가 어떻게 조직되어 있는지\n6. **실행 가능한 인사이트**: 시청자를 위한
+    실용적인 시사점\n7. **재생 시간 분석**: 콘텐츠 밀도와 진행 속도\n\n자막 내용이 제공되면 이를 주요 소스로 사용하고, 그렇지 않으면
+    비디오 설명과 메타데이터를 기반으로 요약합니다. **모든 결과는 반드시 한국어로 작성해야 합니다.**"
+  expected_output: 비디오 개요, 주요 주제, 핵심 포인트, 대상 청중, 콘텐츠 구조, 실행 가능한 인사이트, 권장사항에 대한 섹션이
+    포함된 구조화된 한국어 마크다운 보고서. 시작 부분에 간략한 요약을 포함해야 합니다. 모든 내용은 한국어로 작성되어야 합니다.
+  agent: content_summarizer
+  context:
+  - extract_youtube_video_information

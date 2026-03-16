@@ -43,7 +43,7 @@ interface NewsChannelItem {
   videoUrl: string
 }
 
-type ChannelStockMode = 'auto' | 'low_stock' | 'off'
+type ChannelStockMode = 'auto' | 'strict' | 'off' | 'low_stock'
 type ChannelNewsMode = 'auto' | 'strict' | 'off'
 
 export default function DashboardPage() {
@@ -156,7 +156,7 @@ export default function DashboardPage() {
   const getEmptyStocksMessage = (video: Video) => {
     const { stock } = getChannelModes(video)
     if (stock === 'off') return '관련 종목을 보려면 설정에서 관련주 모드를 auto로 바꿔주세요.'
-    if (stock === 'low_stock') return 'low_stock 모드입니다. 관련 종목을 보려면 설정에서 auto로 바꿔주세요.'
+    if (stock === 'strict' || stock === 'low_stock') return 'strict 모드입니다. 관련 종목을 보려면 설정에서 auto로 바꿔주세요.'
     return '관련 종목을 찾지 못했습니다.'
   }
 
@@ -219,7 +219,11 @@ export default function DashboardPage() {
         ? `/api/videos/${videoId}/news?refresh=${refreshTarget}`
         : `/api/videos/${videoId}/news`
       const res = await fetch(url, { cache: 'no-store' })
-      if (!res.ok) throw new Error('뉴스를 불러오지 못했습니다')
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => ({}))
+        const detail = typeof errorPayload?.error === 'string' ? errorPayload.error : ''
+        throw new Error(detail ? `뉴스를 불러오지 못했습니다: ${detail}` : '뉴스를 불러오지 못했습니다')
+      }
       const data = await res.json()
       const articles = Array.isArray(data?.articles) ? data.articles : []
       const stocks = Array.isArray(data?.stocks) ? data.stocks : []
@@ -232,7 +236,8 @@ export default function DashboardPage() {
       setNewsCacheKeyByVideoId(prev => ({ ...prev, [videoId]: cacheKey }))
     } catch (error) {
       console.error(error)
-      setNewsErrorByVideoId(prev => ({ ...prev, [videoId]: '뉴스를 가져오지 못했습니다.' }))
+      const message = error instanceof Error ? error.message : '뉴스를 가져오지 못했습니다.'
+      setNewsErrorByVideoId(prev => ({ ...prev, [videoId]: message }))
     } finally {
       setNewsLoadingVideoId(prev => (prev === videoId ? null : prev))
       setStocksLoadingVideoId(prev => (prev === videoId ? null : prev))

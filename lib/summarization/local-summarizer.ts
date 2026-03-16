@@ -143,6 +143,7 @@ export class GeminiSummarizer implements LocalSummarizer {
   }
 }
 
+
 /**
  * Ollama-based local summarizer
  * 
