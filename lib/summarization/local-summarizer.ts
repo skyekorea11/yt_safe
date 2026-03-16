@@ -69,17 +69,13 @@ export class GeminiSummarizer implements LocalSummarizer {
       return null
     }
 
-    const { cleanTranscript, selectRepresentativeSentences, isTranscriptTooShort } = await import('@/lib/utils/transcript')
+    const { cleanTranscript, buildGeminiTranscriptContext, isTranscriptTooShort } = await import('@/lib/utils/transcript')
     const cleaned = cleanTranscript(text)
 
     if (isTranscriptTooShort(cleaned)) return cleaned || null
 
-    // Sample representative sentences evenly across the full transcript.
-    // 5000 chars keeps us well within Gemini's token limits and avoids 400 errors.
-    const MAX_CHARS = 5000
-    const input = cleaned.length > MAX_CHARS
-      ? selectRepresentativeSentences(cleaned, 10).slice(0, MAX_CHARS)
-      : cleaned
+    // Preserve intro/body/outro context so the summary captures the full narrative.
+    const input = buildGeminiTranscriptContext(cleaned, 12000)
 
     // Rate limiting: 최소 8초 간격
     const elapsed = Date.now() - lastGeminiRequestTime
@@ -91,12 +87,13 @@ export class GeminiSummarizer implements LocalSummarizer {
     const systemInstruction = [
       '당신은 유튜브 영상 자막을 한국어로 요약하는 전문가입니다.',
       '다음 규칙을 반드시 따르십시오.',
-      '1. 완전한 서술형 문장 2~3개로 작성한다.',
+      '1. 완전한 서술형 문장 3개로 작성한다.',
       '2. 구어체, 반복 표현, 불필요한 세부 예시는 제거한다.',
-      '3. 영상 전체의 핵심 메시지 중심으로 정리하며 앞부분만 요약하지 않는다.',
+      '3. 영상 전체의 핵심 메시지 중심으로 정리하며 도입/중반/결론을 균형 있게 반영한다.',
       '4. 객관적이고 간결한 문어체 문체를 사용한다.',
       '5. 번호, 불릿, 타임스탬프 없이 자연스러운 문단으로만 작성한다.',
       '6. 반드시 한국어로만 답한다.',
+      '7. 첫 문장은 주제와 문제의식을, 둘째 문장은 핵심 근거/데이터를, 셋째 문장은 결론/시사점을 담는다.',
     ].join(' ')
 
     // Exponential backoff on 429: up to 3 attempts (delays: 8s, 16s)

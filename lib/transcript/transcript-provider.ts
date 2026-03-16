@@ -1,9 +1,9 @@
 import { execFileSync } from 'child_process'
 
 /**
- * Transcript provider - standalone yt-dlp_macos 강제 사용 (impersonate 지원)
- * 경로: /Users/skye/bin/yt-dlp
- * Edge 쿠키 + ko 자막 우선 + rate limit 방어
+ * Transcript provider - yt-dlp 기반 자막 추출
+ * YT_DLP_PATH 우선, 없으면 PATH/일반 설치 경로를 자동 탐색
+ * ko 자막 우선 + (필요 시) impersonate/cookies + rate limit 방어
  */
 
 export interface TranscriptResult {
@@ -21,7 +21,113 @@ export interface TranscriptProvider {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const YT_DLP_PATH = '/Users/skye/bin/yt-dlp';
+const USE_BROWSER_COOKIES = (process.env.YT_DLP_USE_BROWSER_COOKIES || '').toLowerCase() === 'true';
+const COOKIES_BROWSER = process.env.YT_DLP_COOKIES_BROWSER || 'edge';
+const IMPERSONATE_TARGET = process.env.YT_DLP_IMPERSONATE || 'edge';
+const configuredYtDlpPath = process.env.YT_DLP_PATH?.trim();
+const YT_DLP_CANDIDATES = [
+  configuredYtDlpPath,
+  'yt-dlp',
+  '/opt/homebrew/bin/yt-dlp',
+  '/usr/local/bin/yt-dlp',
+  '/Users/skye/bin/yt-dlp',
+].filter((value): value is string => Boolean(value));
+
+function resolveYtDlpPath(): string | null {
+  for (const candidate of YT_DLP_CANDIDATES) {
+    try {
+      execFileSync(candidate, ['--version'], { stdio: 'ignore' });
+      return candidate;
+    } catch {}
+  }
+  return null;
+}
+
+function isImpersonateUnsupported(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Impersonate target .* is not available/i.test(message)
+    || /missing dependencies required to support this target/i.test(message);
+}
+
+type TranscriptSegment = { start: string; text: string };
+
+function normalizeTimestamp(raw: string): string {
+  const ts = raw.replace(',', '.').trim();
+  const parts = ts.split(':');
+  if (parts.length === 3) {
+    const [hh, mm, ssms] = parts;
+    const ss = ssms.split('.')[0] || '00';
+    const h = Number(hh || '0');
+    return h > 0 ? `${hh.padStart(2, '0')}:${mm.padStart(2, '0')}:${ss.padStart(2, '0')}` : `${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
+  }
+  if (parts.length === 2) {
+    const [mm, ssms] = parts;
+    const ss = ssms.split('.')[0] || '00';
+    return `${mm.padStart(2, '0')}:${ss.padStart(2, '0')}`;
+  }
+  return ts;
+}
+
+function parseVttSegments(raw: string): TranscriptSegment[] {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const segments: TranscriptSegment[] = [];
+  let activeStart = '';
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (!activeStart || buffer.length === 0) {
+      buffer = [];
+      return;
+    }
+    const text = buffer
+      .join(' ')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) {
+      segments.push({ start: normalizeTimestamp(activeStart), text });
+    }
+    buffer = [];
+  };
+
+  for (const lineRaw of lines) {
+    const line = lineRaw.trim();
+    if (!line) {
+      flush();
+      continue;
+    }
+    const match = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?)\s+-->\s+\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?.*$/);
+    if (match) {
+      flush();
+      activeStart = match[1];
+      continue;
+    }
+    if (/^(WEBVTT|NOTE|Kind:|Language:)/i.test(line) || /^\d+$/.test(line)) continue;
+    buffer.push(line);
+  }
+  flush();
+
+  const deduped: TranscriptSegment[] = [];
+  for (const seg of segments) {
+    if (deduped.length > 0) {
+      const prev = deduped[deduped.length - 1];
+      const prevNorm = prev.text.replace(/\s+/g, ' ').trim();
+      const currNorm = seg.text.replace(/\s+/g, ' ').trim();
+      if (prevNorm === currNorm) continue;
+      if (prev.start === seg.start && (prevNorm.includes(currNorm) || currNorm.includes(prevNorm))) {
+        if (currNorm.length > prevNorm.length) deduped[deduped.length - 1] = seg;
+        continue;
+      }
+      if (prevNorm.includes(currNorm) && currNorm.length >= 8) continue;
+    }
+    deduped.push(seg);
+  }
+  return deduped;
+}
 
 export class YtDlpStandaloneProvider implements TranscriptProvider {
 
@@ -33,35 +139,59 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
     const { promisify } = await import('util');
 
     const exec = promisify(execFile);
+    const ytDlpPath = resolveYtDlpPath();
     const tmpDir = os.tmpdir();
     const baseName = `transcript-${videoId}`;
     const outputTemplate = path.join(tmpDir, `${baseName}.%(ext)s`);
 
+    if (!ytDlpPath) {
+      return { status: 'FAILED', error: 'yt-dlp executable not found (set YT_DLP_PATH)' };
+    }
+
     try {
-      console.log('[yt-dlp-standalone] 한국어 자막 시도 중... (Edge impersonate + 쿠키)');
+      console.log('[yt-dlp-standalone] 한국어 자막 시도 중... (edge impersonate)');
 
       await sleep(8000);
 
-      const buildArgs = (lang: 'ko' | 'en') => [
-        '--skip-download',
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-langs', lang,
-        '--sub-format', 'vtt',
-        '--convert-subs', 'vtt',
-        '--sleep-requests', '10',
-        '--sleep-interval', '8',
-        '--max-sleep-interval', '20',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0',
-        '--impersonate', 'edge',
-        '--cookies-from-browser', 'edge',
-        '--no-check-certificate',
-        '--no-warnings',
-        '--output', outputTemplate,
-        `https://www.youtube.com/watch?v=${videoId}`,
-      ];
+      const buildArgs = (lang: 'ko' | 'en', useImpersonate: boolean) => {
+        const args = [
+          '--skip-download',
+          '--write-sub',
+          '--write-auto-sub',
+          '--sub-langs', lang,
+          '--sub-format', 'vtt',
+          '--convert-subs', 'vtt',
+          '--sleep-requests', '10',
+          '--sleep-interval', '8',
+          '--max-sleep-interval', '20',
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0',
+          '--no-check-certificate',
+          '--no-warnings',
+          '--output', outputTemplate,
+          `https://www.youtube.com/watch?v=${videoId}`,
+        ];
+        if (useImpersonate) {
+          const insertIdx = args.indexOf('--no-check-certificate');
+          args.splice(Math.max(0, insertIdx), 0, '--impersonate', IMPERSONATE_TARGET);
+        }
+        if (USE_BROWSER_COOKIES) {
+          const outputIdx = args.indexOf('--output');
+          args.splice(Math.max(0, outputIdx), 0, '--cookies-from-browser', COOKIES_BROWSER);
+        }
+        return args;
+      };
 
-      await exec(YT_DLP_PATH, buildArgs('ko'));
+      const runLanguage = async (lang: 'ko' | 'en') => {
+        try {
+          await exec(ytDlpPath, buildArgs(lang, true));
+        } catch (error) {
+          if (!isImpersonateUnsupported(error)) throw error;
+          console.warn('[yt-dlp-standalone] impersonate 미지원, 일반 모드로 재시도');
+          await exec(ytDlpPath, buildArgs(lang, false));
+        }
+      };
+
+      await runLanguage('ko');
 
       const files = await fs.readdir(tmpDir);
       let vttFile: string | undefined = files.find(f =>
@@ -74,7 +204,7 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
         console.log('[yt-dlp-standalone] ko 없음 → en 시도');
         await sleep(15000);
 
-        await exec(YT_DLP_PATH, buildArgs('en'));
+        await runLanguage('en');
 
         const files2 = await fs.readdir(tmpDir);
         vttFile = files2.find(f =>
@@ -89,32 +219,9 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
       }
 
       const filePath = path.join(tmpDir, vttFile);
-      let content = await fs.readFile(filePath, 'utf-8');
-
-      content = content
-        .replace(/^WEBVTT[\s\S]*?\n{2,}/i, '')
-        .replace(/^\s*\d+\s*$/gm, '')
-        .replace(/^\s*\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?\s+-->\s+\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{3})?.*$/gm, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>');
-
-      // Remove empty/metadata lines and collapse adjacent duplicate caption lines.
-      const lines = content
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .filter(line => !/^(?:Kind|Language|NOTE)\b/i.test(line));
-
-      const deduped: string[] = [];
-      for (const line of lines) {
-        if (deduped[deduped.length - 1] === line) continue;
-        deduped.push(line);
-      }
-
-      content = deduped.join('\n').trim();
+      const rawVtt = await fs.readFile(filePath, 'utf-8');
+      const segments = parseVttSegments(rawVtt);
+      const content = segments.map(seg => `[${seg.start}] ${seg.text}`).join('\n').trim();
 
       if (content.length < 50) {
         return { status: 'NOT_AVAILABLE' };
@@ -145,16 +252,15 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
 
   isAvailable(): boolean {
     if (typeof window !== 'undefined') return false;
-    try {
-      execFileSync(YT_DLP_PATH, ['--version'], { stdio: 'ignore' });
-      return true;
-    } catch (e) {
-      console.error('yt-dlp 실행 불가:', e);
-      return false;
-    }
+    return resolveYtDlpPath() !== null;
   }
 
-  getName() { return 'yt-dlp-standalone (edge impersonate)'; }
+  getName() {
+    const path = resolveYtDlpPath();
+    return path
+      ? `yt-dlp-standalone (edge impersonate, path=${path})`
+      : 'yt-dlp-standalone (edge impersonate, unavailable)';
+  }
 }
 
 class CompositeTranscriptProvider implements TranscriptProvider {

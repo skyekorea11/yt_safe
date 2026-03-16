@@ -16,6 +16,7 @@ export async function POST(
     // parse body: may optionally contain videoIds array for batch processing
     const body = await request.json().catch(() => ({}))
     const ids: string[] = []
+    const force = body.force === true
 
     if (Array.isArray(body.videoIds)) {
       ids.push(...body.videoIds)
@@ -40,7 +41,7 @@ export async function POST(
       await Promise.all(uniqueIds.map(async (id) => {
         try {
           const existing = await videoRepository.getByYouTubeId(id)
-          if (existing?.transcript_text) {
+          if (!force && existing?.transcript_text) {
             results.set(id, 'cached')
             return
           }
@@ -73,7 +74,7 @@ export async function POST(
 
     // check cache first
     const existing = await videoRepository.getByYouTubeId(singleId)
-    if (existing?.transcript_text) {
+    if (!force && existing?.transcript_text) {
       return NextResponse.json(
         {
           success: true,
@@ -87,6 +88,7 @@ export async function POST(
 
     // if transcript already processed status indicates no need to refetch
     if (
+      !force &&
       existing &&
       (existing.transcript_status === 'extracted' || existing.transcript_status === 'not_available')
     ) {

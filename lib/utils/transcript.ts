@@ -360,6 +360,43 @@ export function selectRepresentativeSentences(text: string, segmentCount = 8): s
 }
 
 /**
+ * Build a richer transcript context for LLM summarization.
+ * Keeps intro + representative body + ending so the model does not overfit to the opening section.
+ */
+export function buildGeminiTranscriptContext(text: string, maxChars = 12000): string {
+  const cleaned = cleanTranscript(text).replace(/\n+/g, ' ').trim()
+  if (!cleaned) return ''
+  if (cleaned.length <= maxChars) return cleaned
+
+  const sentences = splitSentenceLikeUnits(cleaned)
+    .map(s => ensureSentenceEnding(postprocessSummarySentence(s)))
+    .filter(s => s.length >= 20 && s.length <= 280)
+
+  if (sentences.length === 0) {
+    return cleaned.slice(0, maxChars)
+  }
+
+  const intro = sentences.slice(0, 3)
+  const outro = sentences.slice(-3)
+  const representative = selectRepresentativeSentences(cleaned, 14)
+    .split(/(?<=[.!?])\s+/)
+    .map(s => ensureSentenceEnding(postprocessSummarySentence(s)))
+    .filter(s => s.length >= 20 && s.length <= 280)
+
+  const dedup = new Set<string>()
+  const merged: string[] = []
+  for (const sentence of [...intro, ...representative, ...outro]) {
+    const key = sentence.toLowerCase().replace(/[\s,.!?]/g, '')
+    if (!key || dedup.has(key)) continue
+    dedup.add(key)
+    merged.push(sentence)
+  }
+
+  const packed = merged.join(' ')
+  return packed.length <= maxChars ? packed : packed.slice(0, maxChars)
+}
+
+/**
  * Prepare transcript for summarization
  * Clean + chunk if needed
  */

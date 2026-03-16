@@ -1,13 +1,154 @@
 import { getTranscriptProvider } from '@/lib/transcript/transcript-provider'
 import { DescriptionBasedSummarizer, getLocalSummarizer, HeuristicTranscriptSummarizer } from '@/lib/summarization/local-summarizer'
 import { videoRepository } from '@/lib/supabase/videos'
-import { buildHeuristicSummary, cleanTranscript, ensureKoreanSummary, formatSummaryText } from '@/lib/utils/transcript'
+import { buildHeuristicSummary, chunkTranscript, cleanTranscript, ensureKoreanSummary, formatSummaryText } from '@/lib/utils/transcript'
 
 /**
  * Summary service orchestrates transcript extraction and summarization
  */
 
 export const summaryService = {
+  isChunkedSummarizationEnabled(): boolean {
+    return (process.env.CHUNK_SUMMARY_ENABLED || 'true').toLowerCase() !== 'false'
+  },
+
+  chunkSummarizationThreshold(): number {
+    return Number(process.env.CHUNK_SUMMARY_THRESHOLD || '7000')
+  },
+
+  chunkSize(): number {
+    return Number(process.env.CHUNK_SUMMARY_CHUNK_SIZE || '1800')
+  },
+
+  chunkLimit(): number {
+    return Number(process.env.CHUNK_SUMMARY_MAX_CHUNKS || '6')
+  },
+  isDescriptionFallbackEnabled(): boolean {
+    return process.env.ALLOW_DESCRIPTION_FALLBACK === 'true'
+  },
+
+  extractExternalSummaryFromHtml(html: string): string | null {
+    if (!html) return null
+    const candidates = [
+      html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i)?.[1],
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i)?.[1],
+      html.match(/"description"\s*:\s*"([^"]+)"/i)?.[1],
+      html.match(/<p[^>]*>([^<]{80,})<\/p>/i)?.[1],
+    ]
+    const picked = candidates.find((v) => typeof v === 'string' && v.trim().length > 40)
+    if (!picked) return null
+    const decoded = picked
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (decoded.length < 40) return null
+    if (this.isLowQualityExternalSummary(decoded)) return null
+    return decoded
+  },
+
+  isLowQualityExternalSummary(text: string): boolean {
+    const normalized = text.replace(/\s+/g, ' ').trim().toLowerCase()
+    if (!normalized) return true
+    const badPhrases = [
+      '요약 생성에 실패',
+      '자막이 없어 ai 요약을 생성할 수 없습니다',
+      '분석 중',
+      '콘텐츠를 준비 중',
+      '오류가 발생했습니다',
+      'loading',
+    ]
+    return badPhrases.some((phrase) => normalized.includes(phrase))
+  },
+
+  async fetchSummarizeTechSummary(videoId: string): Promise<string | null> {
+    if ((process.env.SUMMARIZE_TECH_FALLBACK || 'true').toLowerCase() === 'false') return null
+
+    const candidates = [
+      `https://www.summarize.tech/${videoId}`,
+      `https://www.summarize.tech/www.youtube.com/watch?v=${videoId}`,
+    ]
+
+    for (const url of candidates) {
+      try {
+        const res = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'user-agent': 'Mozilla/5.0 (compatible; YT-Digest/1.0)',
+            accept: 'text/html,application/xhtml+xml',
+          },
+        })
+        if (!res.ok) continue
+        const html = await res.text()
+        if (!html) continue
+
+        const extracted = this.extractExternalSummaryFromHtml(html)
+        if (!extracted) continue
+        return extracted
+      } catch (error) {
+        console.warn('[summary] summarize.tech fetch failed:', error)
+      }
+    }
+    return null
+  },
+
+  async fetchBriefYouSummary(videoId: string): Promise<string | null> {
+    if ((process.env.BRIEFYOU_FALLBACK || 'true').toLowerCase() === 'false') return null
+
+    const candidates = [
+      // 공식 결과 페이지 패턴
+      `https://briefyou.co.kr/youtube-analysis-result/${videoId}`,
+      // 사이트 안내된 "링크 뒤 asd 추가" 패턴 대응
+      `https://www.youtube.com/watch?v=${videoId}asd`,
+      `https://youtube.com/watch?v=${videoId}asd`,
+      // 기존 호환 경로 유지
+      `https://www.youtubeasd.com/watch?v=${videoId}`,
+    ]
+
+    for (const url of candidates) {
+      try {
+        const res = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'user-agent': 'Mozilla/5.0 (compatible; YT-Digest/1.0)',
+            accept: 'text/html,application/xhtml+xml',
+          },
+        })
+        if (!res.ok) continue
+        const html = await res.text()
+        const extracted = this.extractExternalSummaryFromHtml(html)
+        if (!extracted) continue
+        if (this.isLowQualityExternalSummary(extracted)) continue
+        return extracted
+      } catch (error) {
+        console.warn('[summary] briefyou fetch failed:', error)
+      }
+    }
+
+    return null
+  },
+
+  async generateExternalSummary(
+    videoId: string,
+    title: string,
+    description: string
+  ): Promise<{ text: string; sourceType: 'external' } | null> {
+    const external =
+      await this.fetchBriefYouSummary(videoId) ||
+      await this.fetchSummarizeTechSummary(videoId)
+    if (!external) return null
+
+    const formatted = formatSummaryText(external, 3)
+    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 3) || formatted
+    if (!ensured) return null
+
+    await videoRepository.updateSummary(videoId, ensured, 'external', 'complete')
+    return { text: ensured, sourceType: 'external' }
+  },
+
   /**
    * Generate or fetch summary for a video
    *
@@ -21,8 +162,9 @@ export const summaryService = {
     description: string,
     useTranscriptPipeline = true,
     forceRefresh = false
-  ): Promise<{ text: string; sourceType: 'transcript' | 'description' } | null> {
+  ): Promise<{ text: string; sourceType: 'transcript' | 'description' | 'external' } | null> {
     try {
+      const allowDescriptionFallback = this.isDescriptionFallbackEnabled()
       const video = await videoRepository.getByYouTubeId(videoId)
 
       // 이미 완성된 transcript 요약이 있으면 바로 반환
@@ -30,9 +172,12 @@ export const summaryService = {
         video &&
         !forceRefresh &&
         video.summary_status === 'complete' &&
-        video.summary_source_type === 'transcript'
+        (video.summary_source_type === 'transcript' || video.summary_source_type === 'external')
       ) {
-        return { text: video.summary_text || '', sourceType: 'transcript' }
+        return {
+          text: video.summary_text || '',
+          sourceType: (video.summary_source_type || 'transcript') as 'transcript' | 'external',
+        }
       }
 
       // description 요약만 있고 파이프라인이 켜져 있으면 transcript로 업그레이드 시도
@@ -47,7 +192,9 @@ export const summaryService = {
           const upgrade = await this.generateTranscriptSummary(videoId, video.transcript_text)
           if (upgrade) return upgrade
         }
-        return { text: video.summary_text || '', sourceType: 'description' }
+        if (allowDescriptionFallback) {
+          return { text: video.summary_text || '', sourceType: 'description' }
+        }
       }
 
       // 파이프라인 꺼져 있고 description 요약 있으면 반환
@@ -58,7 +205,9 @@ export const summaryService = {
         video.summary_status === 'complete' &&
         video.summary_source_type === 'description'
       ) {
-        return { text: video.summary_text || '', sourceType: 'description' }
+        if (allowDescriptionFallback) {
+          return { text: video.summary_text || '', sourceType: 'description' }
+        }
       }
 
       // transcript는 있는데 요약이 없거나 refresh 필요한 경우
@@ -83,11 +232,19 @@ export const summaryService = {
     title: string,
     description: string,
     useTranscriptPipeline = true
-  ): Promise<{ text: string; sourceType: 'transcript' | 'description' } | null> {
+  ): Promise<{ text: string; sourceType: 'transcript' | 'description' | 'external' } | null> {
     try {
-      const fallbackToDescription = async () => (
-        this.generateDescriptionSummary(videoId, title, description)
-      )
+      const allowDescriptionFallback = this.isDescriptionFallbackEnabled()
+      const fallbackToDescription = async () => {
+        const external = await this.generateExternalSummary(videoId, title, description)
+        if (external) return external
+        if (allowDescriptionFallback) {
+          return this.generateDescriptionSummary(videoId, title, description)
+        }
+        const message = '자막/외부 요약을 확보하지 못했습니다'
+        await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
+        return { text: message, sourceType: 'transcript' as const }
+      }
 
       const transcriptProvider = getTranscriptProvider()
       const existing = await videoRepository.getByYouTubeId(videoId)
@@ -125,7 +282,17 @@ export const summaryService = {
       }
 
       // transcript 있으면 요약 생성
-      return await this.generateTranscriptSummary(videoId, transcript)
+      const transcriptSummary = await this.generateTranscriptSummary(videoId, transcript)
+      if (transcriptSummary) return transcriptSummary
+
+      const external = await this.generateExternalSummary(videoId, title, description)
+      if (external) return external
+      if (allowDescriptionFallback) {
+        return await this.generateDescriptionSummary(videoId, title, description)
+      }
+      const message = '자막/외부 요약을 확보하지 못했습니다'
+      await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
+      return { text: message, sourceType: 'transcript' as const }
     } catch (error) {
       console.error('[summary] Error generating new summary:', error)
       return null
@@ -197,19 +364,49 @@ export const summaryService = {
 
       console.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
 
-      let summary = await summarizer.summarize(cleanedTranscript, 200)
+      let summary: string | null = null
+      const shouldChunk =
+        this.isChunkedSummarizationEnabled() &&
+        cleanedTranscript.length >= this.chunkSummarizationThreshold()
+
+      if (shouldChunk) {
+        const chunks = chunkTranscript(cleanedTranscript, this.chunkSize()).slice(0, this.chunkLimit())
+        const chunkSummaries: string[] = []
+
+        for (const chunk of chunks) {
+          const partial = await summarizer.summarize(chunk, 160)
+          if (partial) {
+            chunkSummaries.push(formatSummaryText(partial, 2))
+          } else {
+            chunkSummaries.push(formatSummaryText(buildHeuristicSummary(chunk, 2), 2))
+          }
+        }
+
+        const mergedChunkSummary = chunkSummaries.join('\n')
+        summary = await summarizer.summarize(mergedChunkSummary, 220)
+        if (!summary) {
+          summary = formatSummaryText(mergedChunkSummary, 3)
+        }
+      } else {
+        summary = await summarizer.summarize(cleanedTranscript, 200)
+      }
 
       if (!summary && !(summarizer instanceof HeuristicTranscriptSummarizer)) {
         console.warn('[summary] primary summarizer failed, falling back to heuristic transcript summary')
         summary = await new HeuristicTranscriptSummarizer().summarize(cleanedTranscript, 200)
       }
 
+      const heuristicSummary = formatSummaryText(buildHeuristicSummary(cleanedTranscript, 3), 3)
       const formattedSummaryRaw = summary
         ? formatSummaryText(summary, 3)
-        : formatSummaryText(buildHeuristicSummary(cleanedTranscript, 3), 3)
+        : heuristicSummary
+      const robustSummaryRaw =
+        formattedSummaryRaw.split('\n').filter(Boolean).length >= 2
+          ? formattedSummaryRaw
+          : formatSummaryText(`${formattedSummaryRaw}\n${heuristicSummary}`, 3)
       const video = await videoRepository.getByYouTubeId(videoId)
       const formattedSummary = ensureKoreanSummary(
-        formattedSummaryRaw,
+        robustSummaryRaw,
         `${video?.title || ''} ${video?.description || ''} ${cleanedTranscript.slice(0, 500)}`,
         3
       )
@@ -219,10 +416,7 @@ export const summaryService = {
         await videoRepository.updateSummary(videoId, formattedSummary, 'transcript', 'complete')
         return { text: formattedSummary, sourceType: 'transcript' }
       } else {
-        const fallbackFromDescriptionRaw = formatSummaryText(
-          await new DescriptionBasedSummarizer().summarize(cleanedTranscript, 200) || '',
-          3
-        )
+        const fallbackFromDescriptionRaw = heuristicSummary
         const fallbackFromDescription = ensureKoreanSummary(
           fallbackFromDescriptionRaw,
           `${video?.title || ''} ${video?.description || ''}`,
@@ -251,7 +445,7 @@ export const summaryService = {
   async batchSummarize(
     videos: Array<{ id: string; title: string; description: string }>,
     forceRefresh = false
-  ): Promise<Map<string, { text: string; sourceType: 'transcript' | 'description' }>> {
+  ): Promise<Map<string, { text: string; sourceType: 'transcript' | 'description' | 'external' }>> {
     const summaries = new Map()
     for (const video of videos) {
       const summary = await this.getSummary(video.id, video.title, video.description, true, forceRefresh)
