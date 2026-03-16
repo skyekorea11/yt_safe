@@ -196,8 +196,9 @@ export class OllamaLocalSummarizer implements LocalSummarizer {
   }
 
   isAvailable(): boolean {
-    // optimistic: assume service will be reachable, errors handled in summarize
-    return true
+    // In cloud runtimes, localhost Ollama is usually not reachable.
+    // Only treat Ollama as available when URL is explicitly configured.
+    return !!process.env.OLLAMA_URL?.trim()
   }
 
   getName(): string {

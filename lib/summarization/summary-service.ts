@@ -47,7 +47,7 @@ export const summaryService = {
           const upgrade = await this.generateTranscriptSummary(videoId, video.transcript_text)
           if (upgrade) return upgrade
         }
-        return { text: '자막을 가져오지 못했습니다', sourceType: 'transcript' }
+        return { text: video.summary_text || '', sourceType: 'description' }
       }
 
       // 파이프라인 꺼져 있고 description 요약 있으면 반환
@@ -85,9 +85,9 @@ export const summaryService = {
     useTranscriptPipeline = true
   ): Promise<{ text: string; sourceType: 'transcript' | 'description' } | null> {
     try {
-      void title
-      void description
-      void useTranscriptPipeline
+      const fallbackToDescription = async () => (
+        this.generateDescriptionSummary(videoId, title, description)
+      )
 
       const transcriptProvider = getTranscriptProvider()
       const existing = await videoRepository.getByYouTubeId(videoId)
@@ -95,7 +95,7 @@ export const summaryService = {
       let transcript: string | null = existing?.transcript_text || null
 
       // transcript가 아직 없으면 추출 시도
-      if (!transcript) {
+      if (!transcript && useTranscriptPipeline) {
         if (transcriptProvider.isAvailable()) {
           console.log(`[summary] extracting transcript for ${videoId} via ${transcriptProvider.getName()}`)
           await videoRepository.updateTranscript(videoId, '', 'pending')
@@ -121,9 +121,7 @@ export const summaryService = {
 
       // transcript 없으면 실패 처리
       if (!transcript) {
-        const message = '자막을 가져오지 못했습니다'
-        await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
-        return { text: message, sourceType: 'transcript' }
+        return await fallbackToDescription()
       }
 
       // transcript 있으면 요약 생성
@@ -132,6 +130,41 @@ export const summaryService = {
       console.error('[summary] Error generating new summary:', error)
       return null
     }
+  },
+
+  async generateDescriptionSummary(
+    videoId: string,
+    title: string,
+    description: string
+  ): Promise<{ text: string; sourceType: 'description' }> {
+    const sourceText = [title, description].filter(Boolean).join('\n').trim()
+    const local = getLocalSummarizer()
+    let summary: string | null = null
+
+    if (local.isAvailable()) {
+      try {
+        summary = await local.summarize(sourceText, 180)
+      } catch (error) {
+        console.error('[summary] local description summarizer failed:', error)
+      }
+    }
+
+    if (!summary) {
+      summary = await new DescriptionBasedSummarizer().summarize(sourceText, 180)
+    }
+
+    const fallbackText = summary || sourceText || '요약을 생성할 수 없습니다'
+    const formatted = formatSummaryText(fallbackText, 3)
+    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 3) || formatted
+
+    await videoRepository.updateSummary(
+      videoId,
+      ensured,
+      'description',
+      ensured ? 'complete' : 'failed'
+    )
+
+    return { text: ensured, sourceType: 'description' }
   },
 
   /**
