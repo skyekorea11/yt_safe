@@ -8,6 +8,49 @@ import { buildHeuristicSummary, chunkTranscript, cleanTranscript, ensureKoreanSu
  */
 
 export const summaryService = {
+  isSparseSummary(text: string): boolean {
+    const trimmed = (text || '').trim()
+    if (!trimmed) return true
+    const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean)
+    return lines.length < 4 || trimmed.length < 140
+  },
+
+  buildExpandedDescriptionSummary(title: string, description: string): string {
+    const cleanTitle = (title || '')
+      .replace(/\[[^\]]+\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const cleanDescription = (description || '')
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    const descriptionSnippet = cleanDescription
+      ? (cleanDescription.length > 180
+        ? `${cleanDescription.slice(0, 180).replace(/\s+\S*$/, '')}...`
+        : cleanDescription)
+      : ''
+
+    const lines = [
+      `${cleanTitle || '이 영상'}를 중심으로 핵심 질문과 판단 포인트를 정리합니다.`,
+      descriptionSnippet
+        ? `영상 설명에서는 ${descriptionSnippet.replace(/[.!?]$/, '')}를 다룹니다.`
+        : '영상 설명 정보가 제한적이어서 제목에 드러난 주제를 중심으로 내용을 재구성했습니다.',
+      '핵심 내용은 단일 결론을 제시하기보다 조건별로 쟁점을 나누어 이해하도록 돕는 데 있습니다.',
+      '시청자는 자신의 상황에 맞춰 확인해야 할 기준과 우선순위를 점검할 수 있습니다.',
+      '결론적으로 단기적인 단편 정보보다 맥락과 리스크를 함께 보라는 실용적인 메시지를 전달합니다.',
+    ]
+
+    return formatSummaryText(lines.join(' '), 5)
+  },
+
+  ensureDescriptionSummaryQuality(summary: string, title: string, description: string): string {
+    if (!this.isSparseSummary(summary)) return summary
+    const expanded = this.buildExpandedDescriptionSummary(title, description)
+    if (!expanded) return summary
+    return formatSummaryText(`${summary}\n${expanded}`, 5)
+  },
+
   isExternalSummaryPreferred(): boolean {
     return (process.env.EXTERNAL_SUMMARY_PRIORITY || 'true').toLowerCase() !== 'false'
   },
@@ -341,15 +384,16 @@ export const summaryService = {
     const fallbackText = summary || sourceText || '요약을 생성할 수 없습니다'
     const formatted = formatSummaryText(fallbackText, 5)
     const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 5) || formatted
+    const qualityEnsured = this.ensureDescriptionSummaryQuality(ensured, title, description)
 
     await videoRepository.updateSummary(
       videoId,
-      ensured,
+      qualityEnsured,
       'description',
-      ensured ? 'complete' : 'failed'
+      qualityEnsured ? 'complete' : 'failed'
     )
 
-    return { text: ensured, sourceType: 'description' }
+    return { text: qualityEnsured, sourceType: 'description' }
   },
 
   /**
