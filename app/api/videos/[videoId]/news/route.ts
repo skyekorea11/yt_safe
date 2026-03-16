@@ -247,6 +247,8 @@ const STOCK_KEYWORD_MAP: Array<{
   // 우주 / 항공
   { keywords: ['spacex', '스타링크', 'starlink', '우주개발', '로켓발사'], ticker: 'RKLB', name: 'Rocket Lab', market: 'NASDAQ' },
   { keywords: ['보잉', 'boeing', '항공기제조'], ticker: 'BA', name: 'Boeing', market: 'NYSE' },
+  { keywords: ['천문학', '외계', '외계생명체', '외계신호', 'seti', '우주신호', '우주관측', '전파망원경'], ticker: 'RKLB', name: 'Rocket Lab', market: 'NASDAQ' },
+  { keywords: ['딥스페이스', '우주통신', '심우주', 'satcom', '위성데이터'], ticker: 'IRDM', name: 'Iridium Communications', market: 'NASDAQ' },
 ]
 
 function findRelatedStocks(text: string, max = 6): StockSuggestion[] {
@@ -476,6 +478,21 @@ const SECTOR_RULES: Array<{
       { ticker: 'SQ', name: 'Block', market: 'NYSE' },
       { ticker: '035420', name: 'NAVER', market: 'KOSPI' },
       { ticker: '035720', name: '카카오', market: 'KOSPI' },
+    ],
+  },
+  {
+    sector: 'space_science_astronomy',
+    keywords: [
+      '천문학', '천체물리', '우주과학', '외계', '외계생명체', '외계문명', '외계신호',
+      '신호포착', '우주신호', 'seti', '전파망원경', '우주망원경', '심우주',
+    ],
+    stocks: [
+      { ticker: 'RKLB', name: 'Rocket Lab', market: 'NASDAQ' },
+      { ticker: 'IRDM', name: 'Iridium Communications', market: 'NASDAQ' },
+      { ticker: 'ASTS', name: 'AST SpaceMobile', market: 'NASDAQ' },
+      { ticker: 'LMT', name: 'Lockheed Martin', market: 'NYSE' },
+      { ticker: 'BA', name: 'Boeing', market: 'NYSE' },
+      { ticker: '047810', name: '한국항공우주', market: 'KOSPI' },
     ],
   },
   {
