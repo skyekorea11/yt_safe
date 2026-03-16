@@ -65,6 +65,9 @@ export default function DashboardPage() {
   })
   const [newsByVideoId, setNewsByVideoId] = useState<Record<string, RelatedNewsItem[]>>({})
   const [stocksByVideoId, setStocksByVideoId] = useState<Record<string, StockSuggestion[]>>({})
+  const [mobileDetailPanels, setMobileDetailPanels] = useState<
+    Record<string, { news: boolean; stocks: boolean }>
+  >({})
   const [newsCacheKeyByVideoId, setNewsCacheKeyByVideoId] = useState<Record<string, string>>({})
   const [newsLoadingVideoId, setNewsLoadingVideoId] = useState<string | null>(null)
   const [stocksLoadingVideoId, setStocksLoadingVideoId] = useState<string | null>(null)
@@ -382,9 +385,19 @@ export default function DashboardPage() {
   }, [filteredVideos, selectedChannelId])
 
   const selectedVideo = useMemo(() =>
-    sortedVideos.find(v => v.youtube_video_id === selectedVideoId) ?? sortedVideos[0] ?? null,
+    sortedVideos.find(v => v.youtube_video_id === selectedVideoId) ?? null,
     [sortedVideos, selectedVideoId]
   )
+
+  useEffect(() => {
+    if (sortedVideos.length === 0) {
+      setSelectedVideoId(null)
+      return
+    }
+    if (selectedVideoId && !sortedVideos.some((v) => v.youtube_video_id === selectedVideoId)) {
+      setSelectedVideoId(sortedVideos[0].youtube_video_id)
+    }
+  }, [sortedVideos, selectedVideoId])
 
   useEffect(() => {
     if (!selectedVideo) return
@@ -404,6 +417,258 @@ export default function DashboardPage() {
     newVideoCount:     refreshStatus?.newVideoCount ?? 0,
     onManualRefresh:   handleManualRefresh,
   }
+
+  const toggleMobilePanel = (videoId: string, panel: 'news' | 'stocks') => {
+    setMobileDetailPanels((prev) => {
+      const current = prev[videoId] || { news: false, stocks: false }
+      return {
+        ...prev,
+        [videoId]: {
+          ...current,
+          [panel]: !current[panel],
+        },
+      }
+    })
+  }
+
+  const renderVideoDetail = (video: Video) => (
+    <div className="space-y-4">
+      {(() => {
+        const mobileNewsOpen = mobileDetailPanels[video.youtube_video_id]?.news ?? false
+        const mobileStocksOpen = mobileDetailPanels[video.youtube_video_id]?.stocks ?? false
+        return (
+          <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 leading-snug">
+            {video.title}
+          </h2>
+          {isNewVideo(video) && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs">
+              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-semibold">New</span>
+              <span className="text-gray-400">
+                {new Date(video.created_at).toLocaleString('ko-KR', {
+                  year: 'numeric', month: '2-digit', day: '2-digit',
+                  hour: '2-digit', minute: '2-digit', second: '2-digit',
+                })}
+              </span>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => toggleFavorite(video.youtube_video_id)}
+          disabled={togglingIds.has(video.youtube_video_id)}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          <Heart
+            size={14}
+            className={favoriteIds.has(video.youtube_video_id)
+              ? 'text-red-400 fill-red-400'
+              : 'text-gray-300'}
+          />
+          {favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기'}
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <iframe
+            src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
+            className="w-full aspect-video"
+            allowFullScreen
+          />
+        </div>
+
+        <div className="border border-gray-200 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">영상 요약</h3>
+          {video.transcript_status === 'not_available' ? (
+            <p className="text-sm text-gray-400">아직 자막을 추출할 수 없습니다.</p>
+          ) : video.transcript_status === 'pending' ? (
+            <p className="text-sm text-gray-400 animate-pulse">자막 추출 중...</p>
+          ) : video.summary_status === 'failed' && video.summary_text ? (
+            <p className="text-sm text-gray-400">{video.summary_text}</p>
+          ) : video.summary_status === 'complete' && video.summary_text ? (
+            <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
+              {video.summary_text}
+            </p>
+          ) : isSummaryLoading ? (
+            <p className="text-sm text-gray-400 animate-pulse">요약 생성 중...</p>
+          ) : (
+            <p className="text-sm text-gray-400">아직 요약이 없습니다</p>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleRefreshSummary(video.youtube_video_id)}
+            disabled={isSummaryLoading}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSummaryLoading
+              ? video.transcript_status === 'pending'
+                ? '자막 추출 중...'
+                : '요약 생성 중...'
+              : video.summary_status === 'complete' && !!video.summary_text
+              ? '요약 다시 생성'
+              : video.summary_status === 'failed' || video.transcript_status === 'not_available'
+              ? '요약 다시 시도'
+              : '요약 생성'}
+          </button>
+          <a
+            href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            유튜브 보기
+          </a>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="border border-gray-200 rounded-xl p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gray-700">관련 뉴스</h3>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
+                  void loadRelatedNews(video.youtube_video_id, cacheKey, 'news')
+                }}
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                새로고침
+              </button>
+              <button
+                onClick={() => toggleMobilePanel(video.youtube_video_id, 'news')}
+                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                {mobileNewsOpen ? '접기' : '펼치기'}
+              </button>
+            </div>
+          </div>
+          <div className={`${mobileNewsOpen ? 'block' : 'hidden'} xl:block`}>
+            {newsLoadingVideoId === video.youtube_video_id ? (
+              <p className="text-sm text-gray-400 animate-pulse">관련 뉴스를 찾는 중...</p>
+            ) : newsErrorByVideoId[video.youtube_video_id] ? (
+              <p className="text-sm text-gray-400">{newsErrorByVideoId[video.youtube_video_id]}</p>
+            ) : (newsByVideoId[video.youtube_video_id] || []).length === 0 ? (
+              <p className="text-sm text-gray-400">{getEmptyNewsMessage(video)}</p>
+            ) : (
+              <div className="space-y-2">
+                {(newsByVideoId[video.youtube_video_id] || []).slice(0, 4).map((article, idx) => (
+                  <div
+                    key={`${article.link}-${idx}`}
+                    className="block rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start gap-2">
+                      <a
+                        href={article.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 min-w-0"
+                      >
+                        <p className="text-sm font-medium text-gray-800 line-clamp-2">{article.title}</p>
+                        <p className="mt-1 text-xs text-gray-400">
+                          {article.source}
+                          {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
+                        </p>
+                      </a>
+                      <button
+                        onClick={() => toggleArticleFavorite(video.youtube_video_id, article.link)}
+                        className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                        title="기사 좋아요"
+                      >
+                        <Heart
+                          size={14}
+                          className={isNewsFavorited(newsFavorites, video.youtube_video_id, article.link)
+                            ? 'text-red-400 fill-red-400'
+                            : 'text-gray-300'}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border border-gray-200 rounded-xl p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gray-700">관련 종목</h3>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
+                  void loadRelatedNews(video.youtube_video_id, cacheKey, 'stocks')
+                }}
+                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                종목 새로고침
+              </button>
+              <button
+                onClick={() => toggleMobilePanel(video.youtube_video_id, 'stocks')}
+                className="xl:hidden text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                {mobileStocksOpen ? '접기' : '펼치기'}
+              </button>
+            </div>
+          </div>
+          <div className={`${mobileStocksOpen ? 'block' : 'hidden'} xl:block`}>
+            {stocksLoadingVideoId === video.youtube_video_id ? (
+              <p className="text-sm text-gray-400 animate-pulse">분석 중...</p>
+            ) : (stocksByVideoId[video.youtube_video_id] || []).length === 0 ? (
+              <p className="text-sm text-gray-400">{getEmptyStocksMessage(video)}</p>
+            ) : (
+              <div className="space-y-2">
+                {(stocksByVideoId[video.youtube_video_id] || []).map((stock) => {
+                  const isKorean = stock.market === 'KOSPI' || stock.market === 'KOSDAQ'
+                  const href = isKorean
+                    ? `https://finance.naver.com/item/main.naver?code=${stock.ticker}`
+                    : `https://finance.yahoo.com/quote/${stock.ticker}`
+                  const marketBadge =
+                    stock.market === 'KOSPI' ? 'bg-blue-50 text-blue-600' :
+                    stock.market === 'KOSDAQ' ? 'bg-green-50 text-green-600' :
+                    stock.market === 'NASDAQ' ? 'bg-orange-50 text-orange-600' :
+                    'bg-purple-50 text-purple-600'
+                  return (
+                    <a
+                      key={stock.ticker}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                        stock.is_core
+                          ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                          : 'border-gray-100 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {stock.is_core && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-white">핵심</span>
+                        )}
+                        <span className="text-sm font-medium text-gray-800">{stock.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{stock.ticker}</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${marketBadge}`}>
+                          {stock.market}
+                        </span>
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+          </>
+        )
+      })()}
+    </div>
+  )
 
   if (isLoading) {
     return <AppShell {...shellProps}><LoadingGridSkeleton count={6} /></AppShell>
@@ -437,8 +702,17 @@ export default function DashboardPage() {
                   key={video.youtube_video_id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setSelectedVideoId(video.youtube_video_id)}
-                  onKeyDown={(e) => e.key === 'Enter' && setSelectedVideoId(video.youtube_video_id)}
+                  onClick={() =>
+                    setSelectedVideoId((prev) =>
+                      prev === video.youtube_video_id ? null : video.youtube_video_id
+                    )
+                  }
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' &&
+                    setSelectedVideoId((prev) =>
+                      prev === video.youtube_video_id ? null : video.youtube_video_id
+                    )
+                  }
                   className={`
                     w-full text-left p-4 transition-colors cursor-pointer
                     ${idx !== 0 ? 'border-t border-gray-100' : ''}
@@ -480,6 +754,12 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
+
+                  {isSelected && (
+                    <div className="xl:hidden mt-3 border-t border-gray-200 pt-3">
+                      {renderVideoDetail(video)}
+                    </div>
+                  )}
                 </div>
               )
             })
@@ -488,225 +768,11 @@ export default function DashboardPage() {
 
         {/* ── 가운데: 영상 상세 ────────────────────────────────────────── */}
         <div
-          className="border border-gray-200 rounded-2xl bg-white p-6 overflow-y-auto"
+          className="hidden xl:block border border-gray-200 rounded-2xl bg-white p-6 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           {selectedVideo ? (
-            <div className="space-y-4">
-
-              {/* 제목 + 하트 */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900 leading-snug">
-                    {selectedVideo.title}
-                  </h2>
-                  {isNewVideo(selectedVideo) && (
-                    <div className="mt-1 flex items-center gap-1.5 text-xs">
-                      <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-semibold">New</span>
-                      <span className="text-gray-400">
-                        {new Date(selectedVideo.created_at).toLocaleString('ko-KR', {
-                          year: 'numeric', month: '2-digit', day: '2-digit',
-                          hour: '2-digit', minute: '2-digit', second: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => toggleFavorite(selectedVideo.youtube_video_id)}
-                  disabled={togglingIds.has(selectedVideo.youtube_video_id)}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  <Heart
-                    size={14}
-                    className={favoriteIds.has(selectedVideo.youtube_video_id)
-                      ? 'text-red-400 fill-red-400'
-                      : 'text-gray-300'}
-                  />
-                  {favoriteIds.has(selectedVideo.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기'}
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${selectedVideo.youtube_video_id}`}
-                    className="w-full aspect-video"
-                    allowFullScreen
-                  />
-                </div>
-
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">영상 요약</h3>
-                  {selectedVideo.transcript_status === 'not_available' ? (
-                    <p className="text-sm text-gray-400">아직 자막을 추출할 수 없습니다.</p>
-                  ) : selectedVideo.transcript_status === 'pending' ? (
-                    <p className="text-sm text-gray-400 animate-pulse">자막 추출 중...</p>
-                  ) : selectedVideo.summary_status === 'failed' && selectedVideo.summary_text ? (
-                    <p className="text-sm text-gray-400">{selectedVideo.summary_text}</p>
-                  ) : selectedVideo.summary_status === 'complete' && selectedVideo.summary_text ? (
-                    <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
-                      {selectedVideo.summary_text}
-                    </p>
-                  ) : isSummaryLoading ? (
-                    <p className="text-sm text-gray-400 animate-pulse">요약 생성 중...</p>
-                  ) : (
-                    <p className="text-sm text-gray-400">아직 요약이 없습니다</p>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleRefreshSummary(selectedVideo.youtube_video_id)}
-                    disabled={isSummaryLoading}
-                    className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isSummaryLoading
-                      ? selectedVideo.transcript_status === 'pending'
-                        ? '자막 추출 중...'
-                        : '요약 생성 중...'
-                      : selectedVideo.summary_status === 'complete' && !!selectedVideo.summary_text
-                      ? '요약 다시 생성'
-                      : selectedVideo.summary_status === 'failed' || selectedVideo.transcript_status === 'not_available'
-                      ? '요약 다시 시도'
-                      : '요약 생성'}
-                  </button>
-                  <a
-                    href={`https://youtube.com/watch?v=${selectedVideo.youtube_video_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    유튜브 보기
-                  </a>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
-                {/* 관련 뉴스 */}
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-gray-700">관련 뉴스</h3>
-                    <button
-                      onClick={() => {
-                        const cacheKey = `${selectedVideo.summary_text || ''}|${selectedVideo.title || ''}`
-                        void loadRelatedNews(selectedVideo.youtube_video_id, cacheKey, 'news')
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
-                    >
-                      새로고침
-                    </button>
-                  </div>
-                  {newsLoadingVideoId === selectedVideo.youtube_video_id ? (
-                    <p className="text-sm text-gray-400 animate-pulse">관련 뉴스를 찾는 중...</p>
-                  ) : newsErrorByVideoId[selectedVideo.youtube_video_id] ? (
-                    <p className="text-sm text-gray-400">{newsErrorByVideoId[selectedVideo.youtube_video_id]}</p>
-                  ) : (newsByVideoId[selectedVideo.youtube_video_id] || []).length === 0 ? (
-                    <p className="text-sm text-gray-400">{getEmptyNewsMessage(selectedVideo)}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(newsByVideoId[selectedVideo.youtube_video_id] || []).slice(0, 4).map((article, idx) => (
-                        <div
-                          key={`${article.link}-${idx}`}
-                          className="block rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50 transition-colors"
-                        >
-                          <div className="flex items-start gap-2">
-                            <a
-                              href={article.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex-1 min-w-0"
-                            >
-                              <p className="text-sm font-medium text-gray-800 line-clamp-2">{article.title}</p>
-                              <p className="mt-1 text-xs text-gray-400">
-                                {article.source}
-                                {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
-                              </p>
-                            </a>
-                            <button
-                              onClick={() => toggleArticleFavorite(selectedVideo.youtube_video_id, article.link)}
-                              className="p-1 rounded-md hover:bg-gray-100 transition-colors"
-                              title="기사 좋아요"
-                            >
-                              <Heart
-                                size={14}
-                                className={isNewsFavorited(newsFavorites, selectedVideo.youtube_video_id, article.link)
-                                  ? 'text-red-400 fill-red-400'
-                                  : 'text-gray-300'}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 관련 종목 */}
-                <div className="border border-gray-200 rounded-xl p-4">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-gray-700">관련 종목</h3>
-                    <button
-                      onClick={() => {
-                        const cacheKey = `${selectedVideo.summary_text || ''}|${selectedVideo.title || ''}`
-                        void loadRelatedNews(selectedVideo.youtube_video_id, cacheKey, 'stocks')
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
-                    >
-                      종목 새로고침
-                    </button>
-                  </div>
-                  {stocksLoadingVideoId === selectedVideo.youtube_video_id ? (
-                    <p className="text-sm text-gray-400 animate-pulse">분석 중...</p>
-                  ) : (stocksByVideoId[selectedVideo.youtube_video_id] || []).length === 0 ? (
-                    <p className="text-sm text-gray-400">{getEmptyStocksMessage(selectedVideo)}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(stocksByVideoId[selectedVideo.youtube_video_id] || []).map((stock) => {
-                        const isKorean = stock.market === 'KOSPI' || stock.market === 'KOSDAQ'
-                        const href = isKorean
-                          ? `https://finance.naver.com/item/main.naver?code=${stock.ticker}`
-                          : `https://finance.yahoo.com/quote/${stock.ticker}`
-                        const marketBadge =
-                          stock.market === 'KOSPI' ? 'bg-blue-50 text-blue-600' :
-                          stock.market === 'KOSDAQ' ? 'bg-green-50 text-green-600' :
-                          stock.market === 'NASDAQ' ? 'bg-orange-50 text-orange-600' :
-                          'bg-purple-50 text-purple-600'
-                        return (
-                          <a
-                            key={stock.ticker}
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
-                              stock.is_core
-                                ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-                                : 'border-gray-100 hover:bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              {stock.is_core && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-400 text-white">핵심</span>
-                              )}
-                              <span className="text-sm font-medium text-gray-800">{stock.name}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-gray-400">{stock.ticker}</span>
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${marketBadge}`}>
-                                {stock.market}
-                              </span>
-                            </div>
-                          </a>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-            </div>
+            renderVideoDetail(selectedVideo)
           ) : (
             <EmptyState
               title="영상을 선택하세요"

@@ -255,7 +255,7 @@ export default function FavoritesPage() {
       setEditingNoteText('')
       return
     }
-    if (!selectedVideoId || !favoriteVideos.some(v => v.youtube_video_id === selectedVideoId)) {
+    if (selectedVideoId && !favoriteVideos.some(v => v.youtube_video_id === selectedVideoId)) {
       setSelectedVideoId(favoriteVideos[0].youtube_video_id)
     }
   }, [favoriteVideos, selectedVideoId])
@@ -362,8 +362,17 @@ export default function FavoritesPage() {
         key={video.youtube_video_id}
         role="button"
         tabIndex={0}
-        onClick={() => setSelectedVideoId(video.youtube_video_id)}
-        onKeyDown={(e) => e.key === 'Enter' && setSelectedVideoId(video.youtube_video_id)}
+        onClick={() =>
+          setSelectedVideoId((prev) =>
+            prev === video.youtube_video_id ? null : video.youtube_video_id
+          )
+        }
+        onKeyDown={(e) =>
+          e.key === 'Enter' &&
+          setSelectedVideoId((prev) =>
+            prev === video.youtube_video_id ? null : video.youtube_video_id
+          )
+        }
         className={`border rounded-2xl bg-white p-4 space-y-3 transition-colors ${
           isSelected ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200'
         }`}
@@ -482,6 +491,43 @@ export default function FavoritesPage() {
             {isSelected ? '선택됨' : '클릭해서 메모'}
           </span>
         </div>
+
+        {isSelected && (
+          <div
+            className="xl:hidden mt-2 border-t border-gray-200 pt-3 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rounded-xl border border-gray-200 overflow-hidden bg-black">
+              <iframe
+                src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
+                className="w-full aspect-video"
+                allowFullScreen
+              />
+            </div>
+            <a
+              href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              <ExternalLink size={12} />
+              유튜브에서 열기
+            </a>
+            <textarea
+              value={editingNoteText}
+              onChange={(e) => setEditingNoteText(e.target.value)}
+              placeholder="선택한 영상의 메모를 작성하세요..."
+              className="w-full min-h-[160px] resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 leading-relaxed"
+            />
+            <button
+              onClick={handleSaveNote}
+              disabled={isNoteSaving}
+              className="w-full py-2 text-sm font-medium rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {isNoteSaving ? '저장 중...' : '메모 저장'}
+            </button>
+          </div>
+        )}
       </div>
     )
   }
@@ -695,14 +741,30 @@ export default function FavoritesPage() {
               )}
             </div>
 
-            <aside className="border border-gray-200 rounded-2xl bg-white p-4 xl:sticky xl:top-24">
-              <h2 className="text-sm font-semibold text-gray-800">메모</h2>
+            <aside className="hidden xl:block border border-gray-200 rounded-2xl bg-white p-4 xl:sticky xl:top-24">
+              <h2 className="text-sm font-semibold text-gray-800">영상 보기 · 메모</h2>
               {selectedVideo ? (
                 <div className="mt-3 space-y-3">
                   <div className="rounded-xl border border-gray-100 p-3">
                     <p className="text-xs text-gray-400">{getChannelDisplayName(selectedVideo)}</p>
                     <p className="mt-1 text-sm font-medium text-gray-800 line-clamp-2">{selectedVideo.title}</p>
                   </div>
+                  <div className="rounded-xl border border-gray-200 overflow-hidden bg-black">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${selectedVideo.youtube_video_id}`}
+                      className="w-full aspect-video"
+                      allowFullScreen
+                    />
+                  </div>
+                  <a
+                    href={`https://youtube.com/watch?v=${selectedVideo.youtube_video_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    유튜브에서 열기
+                  </a>
                   <textarea
                     value={editingNoteText}
                     onChange={(e) => setEditingNoteText(e.target.value)}
