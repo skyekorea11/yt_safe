@@ -435,16 +435,8 @@ function CollapsedSidebarRail({
   }
 
   return (
-    <aside className="hidden lg:flex w-12 shrink-0 bg-white border-r border-slate-100 items-start justify-start pt-3">
+    <aside className="relative hidden lg:flex w-12 shrink-0 bg-white border-r border-slate-100 items-start justify-start pt-3">
       <div className="w-full flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="ui-btn ui-btn-icon ui-btn-sm"
-          aria-label="사이드바 열기"
-        >
-          <Menu size={16} />
-        </button>
         <div className="w-7 h-px bg-slate-200 my-1" />
         {COLLAPSED_NAV_ITEMS.map((item) => {
           const Icon = item.icon
@@ -466,6 +458,15 @@ function CollapsedSidebarRail({
           )
         })}
       </div>
+      {/* Sticky-tab: protrudes from rail's right edge */}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute top-2 right-0 translate-x-full z-10 flex items-center justify-center bg-indigo-50 border border-l-0 border-indigo-200 rounded-r-lg px-1 py-2.5 shadow-sm hover:bg-indigo-100 transition-colors"
+        aria-label="사이드바 열기"
+      >
+        <ChevronRight size={13} className="text-indigo-400" />
+      </button>
     </aside>
   )
 }
@@ -616,18 +617,8 @@ export default function AppShell({
             <ChevronLeft size={13} className="text-indigo-400" />
           </button>
         </div>
-        {/* Desktop collapsed: sticky-tab on left edge (no rail) */}
         {!desktopSidebarOpen && (
-          <div className="relative hidden lg:block shrink-0 w-0">
-            <button
-              type="button"
-              onClick={() => updateDesktopSidebarOpen(true)}
-              className="absolute top-2 left-0 z-10 flex items-center justify-center bg-indigo-50 border border-indigo-200 rounded-r-lg px-1 py-2.5 shadow-sm hover:bg-indigo-100 transition-colors"
-              aria-label="사이드바 열기"
-            >
-              <ChevronRight size={13} className="text-indigo-400" />
-            </button>
-          </div>
+          <CollapsedSidebarRail pathname={pathname} onOpen={() => updateDesktopSidebarOpen(true)} />
         )}
 
         <main className="flex-1 overflow-y-auto p-5 pb-20 lg:pb-5 lg:pl-8">{children}</main>
