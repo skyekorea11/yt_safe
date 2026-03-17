@@ -16,6 +16,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var mode = localStorage.getItem('theme-mode');
+            var tone = localStorage.getItem('theme-tone');
+            if (!mode) mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            if (mode === 'dark') document.documentElement.classList.add('dark');
+            if (tone === 'beige') document.documentElement.classList.add('beige');
+          } catch(e) {}
+        `}} />
+      </head>
       <body className="antialiased">
         {children}
       </body>

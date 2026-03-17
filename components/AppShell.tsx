@@ -492,15 +492,19 @@ export default function AppShell({
   })
   const [channelOrder, setChannelOrder] = useState<string[]>([])
   const [groupingEnabled, setGroupingEnabled] = useState(false)
-  const [mode, setMode] = useState<'light' | 'dark'>('light')
-  const [tone, setTone] = useState<'cool' | 'beige'>('cool')
-
-  useEffect(() => {
+  const [mode, setMode] = useState<'light' | 'dark'>(() => {
     try {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setMode(prefersDark ? 'dark' : 'light')
-    } catch {}
-  }, [])
+      const saved = localStorage.getItem('theme-mode')
+      if (saved === 'dark' || saved === 'light') return saved
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    } catch { return 'light' }
+  })
+  const [tone, setTone] = useState<'cool' | 'beige'>(() => {
+    try {
+      const saved = localStorage.getItem('theme-tone')
+      return saved === 'beige' ? 'beige' : 'cool'
+    } catch { return 'cool' }
+  })
 
   useEffect(() => {
     const root = document.documentElement
@@ -553,10 +557,18 @@ export default function AppShell({
   }
 
   const toggleMode = () =>
-    setMode((prev) => (prev === 'dark' ? 'light' : 'dark'))
+    setMode((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      try { localStorage.setItem('theme-mode', next) } catch {}
+      return next
+    })
 
   const toggleTone = () =>
-    setTone((prev) => (prev === 'beige' ? 'cool' : 'beige'))
+    setTone((prev) => {
+      const next = prev === 'beige' ? 'cool' : 'beige'
+      try { localStorage.setItem('theme-tone', next) } catch {}
+      return next
+    })
 
   const toggleGrouping = () =>
     setGroupingEnabled((prev) => !prev)
