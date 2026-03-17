@@ -22,6 +22,7 @@ interface RelatedNewsItem {
 }
 
 type TabKey = 'all' | string
+type SidebarChannelGroup = 'news' | 'finance' | 'real_estate' | 'tech' | 'lifestyle' | 'etc'
 
 function formatDate(value: string) {
   const d = new Date(value)
@@ -32,6 +33,7 @@ export default function FavoritesPage() {
   const [channels, setChannels] = useState<Channel[]>([])
   const [allVideos, setAllVideos] = useState<Video[]>([])
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [favoriteRankById, setFavoriteRankById] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
 
@@ -107,11 +109,19 @@ export default function FavoritesPage() {
           videoFavoriteRepository.getAllFavorites(),
         ])
         const favoriteVideoIds = favoritesData.map(f => f.youtube_video_id)
+        const rankMap: Record<string, number> = {}
+        const sortedByUpdatedAt = [...favoritesData].sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )
+        sortedByUpdatedAt.forEach((favorite, idx) => {
+          rankMap[favorite.youtube_video_id] = idx
+        })
         const videosData = await videoRepository.getByYouTubeIds(favoriteVideoIds)
         const validVideosData = videosData.filter(isValidStoredVideo)
         setChannels(channelsData)
         setAllVideos(validVideosData)
         setFavoriteIds(new Set(favoriteVideoIds))
+        setFavoriteRankById(rankMap)
 
         // Initialize news/stocks from DB cache
         const newsInit: Record<string, RelatedNewsItem[]> = {}
@@ -130,12 +140,14 @@ export default function FavoritesPage() {
         setChannels(MOCK_CHANNELS)
         setAllVideos(MOCK_VIDEOS)
         setFavoriteIds(new Set())
+        setFavoriteRankById({})
       }
     } catch (error) {
       console.error('Error loading data:', error)
       setChannels(MOCK_CHANNELS)
       setAllVideos(MOCK_VIDEOS)
       setFavoriteIds(new Set())
+      setFavoriteRankById({})
     } finally {
       setIsLoading(false)
     }
@@ -176,6 +188,15 @@ export default function FavoritesPage() {
       isCurrentlyFav ? next.delete(videoId) : next.add(videoId)
       return next
     })
+    setFavoriteRankById(prev => {
+      const next = { ...prev }
+      if (isCurrentlyFav) {
+        delete next[videoId]
+      } else {
+        next[videoId] = -Date.now()
+      }
+      return next
+    })
     setTogglingIds(prev => new Set(prev).add(videoId))
     try {
       const success = await updateVideoFavoriteAction(videoId, !isCurrentlyFav)
@@ -191,6 +212,15 @@ export default function FavoritesPage() {
       setFavoriteIds(prev => {
         const next = new Set(prev)
         isCurrentlyFav ? next.add(videoId) : next.delete(videoId)
+        return next
+      })
+      setFavoriteRankById(prev => {
+        const next = { ...prev }
+        if (isCurrentlyFav) {
+          next[videoId] = -Date.now()
+        } else {
+          delete next[videoId]
+        }
         return next
       })
     } finally {
@@ -219,8 +249,15 @@ export default function FavoritesPage() {
   const favoriteVideos = useMemo(() =>
     allVideos
       .filter(v => favoriteIds.has(v.youtube_video_id))
-      .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime()),
-    [allVideos, favoriteIds]
+      .sort((a, b) => {
+        const aRank = favoriteRankById[a.youtube_video_id]
+        const bRank = favoriteRankById[b.youtube_video_id]
+        if (aRank !== undefined && bRank !== undefined) return aRank - bRank
+        if (aRank !== undefined) return -1
+        if (bRank !== undefined) return 1
+        return new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
+      }),
+    [allVideos, favoriteIds, favoriteRankById]
   )
 
   useEffect(() => {
@@ -281,12 +318,20 @@ export default function FavoritesPage() {
     return map
   }, [favoriteVideos, channelTitleById])
 
-  const sortedChannelIds = useMemo(() =>
-    [...channelVideoMap.entries()]
-      .sort((a, b) => b[1].videos.length - a[1].videos.length)
-      .map(([channelId]) => channelId),
-    [channelVideoMap]
-  )
+  const sortedChannelIds = useMemo(() => {
+    const ids = [...channelVideoMap.keys()]
+    const idxMap = new Map(channels.map((channel, idx) => [channel.youtube_channel_id, idx] as const))
+    return ids.sort((a, b) => {
+      const aIdx = idxMap.get(a)
+      const bIdx = idxMap.get(b)
+      if (aIdx == null && bIdx == null) {
+        return (channelVideoMap.get(b)?.videos.length || 0) - (channelVideoMap.get(a)?.videos.length || 0)
+      }
+      if (aIdx == null) return 1
+      if (bIdx == null) return -1
+      return aIdx - bIdx
+    })
+  }, [channelVideoMap, channels])
 
   const selectedVideo = useMemo(
     () => favoriteVideos.find(v => v.youtube_video_id === selectedVideoId) || null,
@@ -320,9 +365,24 @@ export default function FavoritesPage() {
     }
   }, [sortedChannelIds, showAllChannelTabs, selectedChannelTab])
 
+  const handleChannelGroupChanged = async (channelId: string, group: SidebarChannelGroup) => {
+    const prevChannels = channels
+    setChannels((prev) =>
+      prev.map((channel) =>
+        channel.youtube_channel_id === channelId ? { ...channel, channel_group: group } : channel
+      )
+    )
+    const result = await channelRepository.updateChannelGroup(channelId, group)
+    if (!result.success) {
+      console.error('채널 분류 변경 실패:', result.message || 'unknown_error')
+      setChannels(prevChannels)
+    }
+  }
+
   const shellProps = {
     channels,
     onChannelAdded: loadAll,
+    onChannelGroupChanged: handleChannelGroupChanged,
     newVideoCount: refreshStatus.newVideoCount,
     onManualRefresh: handleManualRefresh,
   }
@@ -493,7 +553,7 @@ export default function FavoritesPage() {
       {/* Header */}
       <div className="mb-4 flex items-center gap-2 xl:text-slate-900">
         <Heart size={18} className="text-red-400 fill-red-400" />
-        <h1 className="text-lg font-semibold text-gray-900">나의 리서치</h1>
+        <h1 className="text-lg font-semibold text-gray-900">나의 Pick</h1>
         <span className="text-sm text-gray-500">({favoriteVideos.length}개 영상)</span>
       </div>
 

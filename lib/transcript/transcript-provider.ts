@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { transcriptUsageRepository } from '@/lib/supabase/videos'
 
 /**
  * Transcript provider - yt-dlp 기반 자막 추출
@@ -9,7 +10,7 @@ import { execFileSync } from 'child_process'
 export interface TranscriptResult {
   status: 'READY' | 'PENDING' | 'NOT_AVAILABLE' | 'FAILED';
   text?: string;
-  source?: 'yt-dlp';
+  source?: 'yt-dlp' | 'azure-service';
   error?: string;
 }
 
@@ -24,6 +25,12 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const USE_BROWSER_COOKIES = (process.env.YT_DLP_USE_BROWSER_COOKIES || '').toLowerCase() === 'true';
 const COOKIES_BROWSER = process.env.YT_DLP_COOKIES_BROWSER || 'edge';
 const IMPERSONATE_TARGET = process.env.YT_DLP_IMPERSONATE || 'edge';
+const TRANSCRIPT_SERVICE_URL = process.env.TRANSCRIPT_SERVICE_URL?.trim() || '';
+const TRANSCRIPT_SERVICE_TOKEN = process.env.TRANSCRIPT_SERVICE_TOKEN?.trim() || '';
+const TRANSCRIPT_SERVICE_TIMEOUT_MS = Number(process.env.TRANSCRIPT_SERVICE_TIMEOUT_MS || '25000');
+const AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY || '120');
+const AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH || '1500');
+const AZURE_TRANSCRIPT_CAP_STRICT = (process.env.AZURE_TRANSCRIPT_CAP_STRICT || 'true').toLowerCase() !== 'false';
 const configuredYtDlpPath = process.env.YT_DLP_PATH?.trim();
 const YT_DLP_CANDIDATES = [
   configuredYtDlpPath,
@@ -263,21 +270,191 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
   }
 }
 
-class CompositeTranscriptProvider implements TranscriptProvider {
-  constructor(private provider: TranscriptProvider) {}
-
-  async fetchTranscript(videoId: string): Promise<TranscriptResult> {
-    if (!this.provider.isAvailable()) {
-      return { status: 'FAILED', error: 'yt-dlp 실행 불가 (경로 확인 필요)' };
-    }
-    return this.provider.fetchTranscript(videoId);
+export class AzureTranscriptServiceProvider implements TranscriptProvider {
+  private withTimeout(ms: number) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return {
+      signal: controller.signal,
+      clear: () => clearTimeout(timer),
+    };
   }
 
-  isAvailable() { return this.provider.isAvailable(); }
-  getName() { return this.provider.getName(); }
+  private normalizeResponse(data: unknown, httpStatus: number): TranscriptResult {
+    const obj = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};
+    const transcriptText = [obj.transcript, obj.text, obj.subtitle, obj.captions]
+      .find((value) => typeof value === 'string' && value.trim()) as string | undefined;
+    const rawStatus = String(obj.status || obj.result || '').toLowerCase();
+
+    if (transcriptText && transcriptText.trim().length >= 50) {
+      return { status: 'READY', text: transcriptText.trim().slice(0, 50000), source: 'azure-service' };
+    }
+
+    if (httpStatus === 404 || rawStatus === 'not_available' || rawStatus === 'not-available' || rawStatus === 'no_transcript') {
+      return { status: 'NOT_AVAILABLE', source: 'azure-service' };
+    }
+
+    if (rawStatus === 'pending' || rawStatus === 'queued' || rawStatus === 'processing') {
+      return { status: 'PENDING', source: 'azure-service' };
+    }
+
+    if (rawStatus === 'ready' || rawStatus === 'extracted' || rawStatus === 'complete') {
+      return { status: 'FAILED', source: 'azure-service', error: 'Transcript marked ready but text missing' };
+    }
+
+    return { status: 'FAILED', source: 'azure-service', error: String(obj.error || `Unexpected response (${httpStatus})`) };
+  }
+
+  private startOfDayIso(): string {
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    return dayStart.toISOString();
+  }
+
+  private startOfMonthIso(): string {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    return monthStart.toISOString();
+  }
+
+  private async checkBudgetCaps(videoId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+    const needDaily = Number.isFinite(AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY) && AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY > 0;
+    const needMonthly = Number.isFinite(AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH) && AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH > 0;
+    if (!needDaily && !needMonthly) return { ok: true };
+
+    const [dailyCount, monthlyCount] = await Promise.all([
+      needDaily ? transcriptUsageRepository.countSince('azure-service', this.startOfDayIso()) : Promise.resolve(0),
+      needMonthly ? transcriptUsageRepository.countSince('azure-service', this.startOfMonthIso()) : Promise.resolve(0),
+    ]);
+
+    if ((needDaily && dailyCount === null) || (needMonthly && monthlyCount === null)) {
+      const message = 'Azure usage cap check failed (usage table unavailable)';
+      await transcriptUsageRepository.log('azure-service', videoId, 'blocked').catch(() => {});
+      if (AZURE_TRANSCRIPT_CAP_STRICT) {
+        return { ok: false, message };
+      }
+      return { ok: true };
+    }
+
+    if (needDaily && (dailyCount || 0) >= AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY) {
+      const message = `Azure daily cap reached (${dailyCount}/${AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY})`;
+      await transcriptUsageRepository.log('azure-service', videoId, 'blocked').catch(() => {});
+      return { ok: false, message };
+    }
+
+    if (needMonthly && (monthlyCount || 0) >= AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH) {
+      const message = `Azure monthly cap reached (${monthlyCount}/${AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH})`;
+      await transcriptUsageRepository.log('azure-service', videoId, 'blocked').catch(() => {});
+      return { ok: false, message };
+    }
+
+    return { ok: true };
+  }
+
+  private async logUsage(videoId: string, status: TranscriptResult['status']) {
+    const normalized =
+      status === 'READY'
+        ? 'ready'
+        : status === 'NOT_AVAILABLE'
+          ? 'not_available'
+          : status === 'PENDING'
+            ? 'pending'
+            : 'failed';
+    await transcriptUsageRepository.log('azure-service', videoId, normalized).catch(() => {});
+  }
+
+  async fetchTranscript(videoId: string): Promise<TranscriptResult> {
+    if (!this.isAvailable()) {
+      return { status: 'FAILED', source: 'azure-service', error: 'TRANSCRIPT_SERVICE_URL is not configured' };
+    }
+
+    const capCheck = await this.checkBudgetCaps(videoId);
+    if (!capCheck.ok) {
+      return { status: 'FAILED', source: 'azure-service', error: capCheck.message };
+    }
+
+    const base = TRANSCRIPT_SERVICE_URL.replace(/\/+$/, '');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (TRANSCRIPT_SERVICE_TOKEN) {
+      headers.Authorization = `Bearer ${TRANSCRIPT_SERVICE_TOKEN}`;
+      headers['x-api-key'] = TRANSCRIPT_SERVICE_TOKEN;
+    }
+
+    // Try a few common endpoint shapes so it works with Azure Function/Container App gateways.
+    const attempts: Array<{ url: string; init: RequestInit }> = [
+      { url: `${base}/api/transcripts/${videoId}`, init: { method: 'POST', headers, body: JSON.stringify({ videoId, force: true }) } },
+      { url: `${base}/transcripts/${videoId}`, init: { method: 'POST', headers, body: JSON.stringify({ videoId, force: true }) } },
+      { url: `${base}/api/transcripts`, init: { method: 'POST', headers, body: JSON.stringify({ videoId, force: true }) } },
+      { url: `${base}/transcripts`, init: { method: 'POST', headers, body: JSON.stringify({ videoId, force: true }) } },
+      { url: `${base}/api/transcripts/${videoId}`, init: { method: 'GET', headers } },
+      { url: `${base}/transcripts/${videoId}`, init: { method: 'GET', headers } },
+    ];
+
+    let lastError = 'Azure transcript service call failed';
+    for (const attempt of attempts) {
+      const { signal, clear } = this.withTimeout(TRANSCRIPT_SERVICE_TIMEOUT_MS);
+      try {
+        const response = await fetch(attempt.url, { ...attempt.init, signal });
+        const payload = await response.json().catch(() => ({}));
+        const normalized = this.normalizeResponse(payload, response.status);
+        if (normalized.status === 'READY' || normalized.status === 'NOT_AVAILABLE' || normalized.status === 'PENDING') {
+          await this.logUsage(videoId, normalized.status);
+          return normalized;
+        }
+        lastError = normalized.error || lastError;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      } finally {
+        clear();
+      }
+    }
+
+    await this.logUsage(videoId, 'FAILED');
+    return { status: 'FAILED', source: 'azure-service', error: lastError };
+  }
+
+  isAvailable(): boolean {
+    if (typeof window !== 'undefined') return false;
+    return Boolean(TRANSCRIPT_SERVICE_URL);
+  }
+
+  getName() {
+    return this.isAvailable()
+      ? `azure-transcript-service (url=${TRANSCRIPT_SERVICE_URL})`
+      : 'azure-transcript-service (unconfigured)';
+  }
+}
+
+class CompositeTranscriptProvider implements TranscriptProvider {
+  constructor(private providers: TranscriptProvider[]) {}
+
+  async fetchTranscript(videoId: string): Promise<TranscriptResult> {
+    const available = this.providers.filter(provider => provider.isAvailable());
+    if (available.length === 0) {
+      return { status: 'FAILED', error: 'Transcript provider unavailable (configure Azure service or yt-dlp)' };
+    }
+
+    let lastFailure: TranscriptResult = { status: 'FAILED', error: 'No provider result' };
+    for (const provider of available) {
+      const result = await provider.fetchTranscript(videoId);
+      if (result.status === 'READY' || result.status === 'NOT_AVAILABLE' || result.status === 'PENDING') {
+        return result;
+      }
+      lastFailure = result;
+    }
+    return lastFailure;
+  }
+
+  isAvailable() { return this.providers.some(provider => provider.isAvailable()); }
+  getName() { return this.providers.map(provider => provider.getName()).join(' -> '); }
 }
 
 export function getTranscriptProvider(): TranscriptProvider {
-  const provider = new YtDlpStandaloneProvider();
-  return new CompositeTranscriptProvider(provider);
+  const providers: TranscriptProvider[] = [
+    new AzureTranscriptServiceProvider(),
+    new YtDlpStandaloneProvider(),
+  ];
+  return new CompositeTranscriptProvider(providers);
 }

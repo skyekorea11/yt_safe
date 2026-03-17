@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.videos (
   published_at TIMESTAMP WITH TIME ZONE,
   duration_text TEXT,
   duration_seconds INTEGER,
+  like_count BIGINT,
   video_url TEXT NOT NULL,
   transcript_status TEXT DEFAULT NULL,
   transcript_text TEXT,
@@ -81,6 +82,15 @@ CREATE TABLE IF NOT EXISTS public.video_favorites (
   FOREIGN KEY (youtube_video_id) REFERENCES public.videos(youtube_video_id) ON DELETE CASCADE
 );
 
+-- Create transcript usage events table (for Azure budget guard)
+CREATE TABLE IF NOT EXISTS public.transcript_usage_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  provider TEXT NOT NULL,
+  youtube_video_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create news_channels table (separate from main video channels)
 CREATE TABLE IF NOT EXISTS public.news_channels (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -100,6 +110,8 @@ ALTER TABLE public.news_channels
 -- Migration: add related news/stocks cache columns (run if upgrading existing DB)
 -- ALTER TABLE public.videos ADD COLUMN IF NOT EXISTS related_news JSONB DEFAULT NULL;
 -- ALTER TABLE public.videos ADD COLUMN IF NOT EXISTS related_stocks JSONB DEFAULT NULL;
+ALTER TABLE public.videos
+  ADD COLUMN IF NOT EXISTS like_count BIGINT;
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_videos_channel_id ON public.videos(youtube_channel_id);
@@ -107,6 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_videos_published_at ON public.videos(published_at
 CREATE INDEX IF NOT EXISTS idx_video_notes_video_id ON public.video_notes(youtube_video_id);
 CREATE INDEX IF NOT EXISTS idx_video_favorites_video_id ON public.video_favorites(youtube_video_id);
 CREATE INDEX IF NOT EXISTS idx_video_favorites_is_favorite ON public.video_favorites(is_favorite);
+CREATE INDEX IF NOT EXISTS idx_transcript_usage_events_provider_created_at ON public.transcript_usage_events(provider, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_news_channels_added_at ON public.news_channels(added_at DESC);
 
 -- Enable RLS (Row Level Security) - optional but recommended for demo
@@ -115,6 +128,7 @@ ALTER TABLE public.videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channel_subscriptions_demo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.video_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.video_favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transcript_usage_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news_channels ENABLE ROW LEVEL SECURITY;
 
 -- Create basic RLS policies (allow all reads and writes for demo - no authentication required)
@@ -142,6 +156,34 @@ CREATE POLICY "Allow all reads" ON public.video_favorites FOR SELECT USING (true
 CREATE POLICY "Allow all inserts" ON public.video_favorites FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow all updates" ON public.video_favorites FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all deletes" ON public.video_favorites FOR DELETE USING (true);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'transcript_usage_events' AND policyname = 'Allow all reads'
+  ) THEN
+    CREATE POLICY "Allow all reads" ON public.transcript_usage_events FOR SELECT USING (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'transcript_usage_events' AND policyname = 'Allow all inserts'
+  ) THEN
+    CREATE POLICY "Allow all inserts" ON public.transcript_usage_events FOR INSERT WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'transcript_usage_events' AND policyname = 'Allow all updates'
+  ) THEN
+    CREATE POLICY "Allow all updates" ON public.transcript_usage_events FOR UPDATE USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'transcript_usage_events' AND policyname = 'Allow all deletes'
+  ) THEN
+    CREATE POLICY "Allow all deletes" ON public.transcript_usage_events FOR DELETE USING (true);
+  END IF;
+END $$;
 
 DO $$
 BEGIN

@@ -74,6 +74,10 @@ async function getChannelModes(youtubeChannelId: string): Promise<{
   stockMode: ChannelStockMode
   newsMode: ChannelNewsMode
 }> {
+  void youtubeChannelId
+  // 사용자 설정에서 기사/영상 모드 제어를 제거했으므로 런타임은 항상 기본값(auto)으로 고정
+  return { stockMode: 'auto', newsMode: 'auto' }
+  /*
   try {
     const { data, error } = await supabase
       .from('channels')
@@ -95,6 +99,7 @@ async function getChannelModes(youtubeChannelId: string): Promise<{
   } catch {
     return { stockMode: 'auto', newsMode: 'auto' }
   }
+  */
 }
 
 function parseCsvRows(text: string): Record<string, string>[] {
@@ -1093,6 +1098,16 @@ const HOUSING_MIGRATION_TERMS = [
   '부동산', '주택', '아파트', '전세', '월세', '청약', '분양', '재건축', '재개발',
   '이사', '인서울', '탈서울', '경기도', '수도권', '주거이동', '주택공급', '임장', '집값', '매매',
 ]
+const CORE_CYBER_SECURITY_TERMS = [
+  '해킹', '보안', '악성코드', '취약점', '랜섬웨어', '스파이웨어', '백도어', '제로데이',
+  '익스플로잇', '해킹도구',
+]
+const PLATFORM_CYBER_TERMS = ['아이폰', 'ios', '안드로이드', '탈옥', '포렌식', '디지털포렌식']
+const CYBER_SECURITY_TERMS = [...CORE_CYBER_SECURITY_TERMS, ...PLATFORM_CYBER_TERMS]
+const GENERIC_ENTITY_ANCHOR_TERMS = new Set([
+  '아이폰', 'ios', '안드로이드', '스마트폰', '모바일',
+  '혁명', '충격', '이유', '전망', '분석',
+])
 
 function normalizeTerm(term: string): string {
   return term.toLowerCase().replace(/\s+/g, '')
@@ -1470,13 +1485,19 @@ export async function GET(
       // 브랜드/기업명 앵커가 있으면 검색 후보에 우선 추가 (무관 기사 유입 감소)
       querySet.add(entityAnchors.slice(0, 2).join(' '))
     }
-    const normalizedBase = `${titleText} ${summaryText}`.toLowerCase().replace(/\s+/g, '')
+    const normalizedTitle = titleText.toLowerCase().replace(/\s+/g, '')
+    const normalizedSummary = summaryText.toLowerCase().replace(/\s+/g, '')
+    const normalizedBase = `${normalizedTitle}${normalizedSummary}`
     const isCartelTopic = CARTEL_TERMS.some(kw => normalizedBase.includes(kw))
     const isFoodCartelTopic = isCartelTopic && FOOD_CARTEL_TERMS.some(kw => normalizedBase.includes(kw))
     const isStarlinkTelecomTopic =
       ['스타링크', 'starlink', '스페이스x', 'spacex', '위성통신', '위성네트워크', '버라이즌', 'verizon', 'at&t', 'att', 'atnt', '통신업계']
         .some(kw => normalizedBase.includes(kw))
-    const isHousingMigrationTopic = HOUSING_MIGRATION_TERMS.some((kw) => normalizedBase.includes(kw))
+    const hasCoreCyberSignal = CORE_CYBER_SECURITY_TERMS.some((kw) => normalizedBase.includes(kw))
+    const hasPlatformCyberSignal = PLATFORM_CYBER_TERMS.some((kw) => normalizedBase.includes(kw))
+    // "아이폰급 혁명"처럼 플랫폼 단어만 등장하는 기술/경제 영상이 보안 토픽으로 오분류되는 것을 방지
+    const isCyberSecurityTopic = hasCoreCyberSignal && (hasPlatformCyberSignal || hasCoreCyberSignal)
+    const isHousingMigrationTopic = !isCyberSecurityTopic && HOUSING_MIGRATION_TERMS.some((kw) => normalizedBase.includes(kw))
     if (isCartelTopic) {
       querySet.add('공정거래위원회 담합')
       querySet.add('가격 담합 과징금')
@@ -1497,10 +1518,17 @@ export async function GET(
       querySet.add('수도권 주택 공급 아파트 분양')
       querySet.add('전세 월세 주택시장')
     }
+    if (isCyberSecurityTopic) {
+      querySet.add('아이폰 해킹 보안')
+      querySet.add('iOS spyware exploit')
+      querySet.add('모바일 보안 취약점')
+    }
     let queryCandidates = [...querySet].filter(Boolean)
-    if (isCartelTopic || isStarlinkTelecomTopic || isHousingMigrationTopic) {
+    if (isCartelTopic || isStarlinkTelecomTopic || isHousingMigrationTopic || isCyberSecurityTopic) {
       const priority = isFoodCartelTopic
         ? ['공정거래위원회 식품 담합', '밀가루 설탕 포도당 담합', '식품 원재료 가격 담합', '공정거래위원회 담합', '가격 담합 과징금']
+        : isCyberSecurityTopic
+        ? ['아이폰 해킹 보안', 'iOS spyware exploit', '모바일 보안 취약점']
         : (isHousingMigrationTopic
           ? ['서울 경기 이사 수요', '인서울 탈서울 주거 이동', '수도권 주택 공급 아파트 분양', '전세 월세 주택시장']
           : (isStarlinkTelecomTopic
@@ -1529,11 +1557,11 @@ export async function GET(
     let queryUsed = queryCandidates[0]
     if (!refreshStocksOnly && !shouldSuppressNewsByChannel) {
       const collected: NewsItem[] = []
-      for (const candidate of queryCandidates.slice(0, 5)) {
+      for (const candidate of queryCandidates.slice(0, 8)) {
         queryUsed = candidate
         const items = await fetchGoogleNews(candidate)
         if (items.length > 0) collected.push(...items)
-        if (collected.length >= 24) break
+        if (collected.length >= 40) break
       }
       if (collected.length > 0) {
         const deduped = new Map<string, NewsItem>()
@@ -1545,12 +1573,22 @@ export async function GET(
       }
     }
 
-    // 전체 기사가 0개면 baseText로 마지막 시도
-    if (!shouldSuppressNewsByChannel && articles.length === 0 && baseText.length > 0) {
+    // 후보 풀이 너무 작을 때는 baseText로 추가 수집 시도
+    if (!shouldSuppressNewsByChannel && articles.length < 8 && baseText.length > 0) {
       const fallback = extractKeywords(baseText, 5).join(' ')
       if (fallback && !querySet.has(fallback)) {
         queryUsed = fallback
-        articles = await fetchGoogleNews(fallback)
+        const fallbackItems = await fetchGoogleNews(fallback)
+        if (articles.length === 0) {
+          articles = fallbackItems
+        } else if (fallbackItems.length > 0) {
+          const deduped = new Map<string, NewsItem>()
+          for (const item of [...articles, ...fallbackItems]) {
+            const key = `${item.title}|${item.link}`
+            if (!deduped.has(key)) deduped.set(key, item)
+          }
+          articles = [...deduped.values()]
+        }
       }
     }
 
@@ -1567,6 +1605,12 @@ export async function GET(
       ? [...new Set([
           ...CARTEL_TERMS,
           ...(isFoodCartelTopic ? FOOD_CARTEL_TERMS : []),
+          ...extractKeywords(queryUsed, 6),
+        ])]
+      : isCyberSecurityTopic
+      ? [...new Set([
+          ...CYBER_SECURITY_TERMS,
+          ...extractKeywords(titleText, 8),
           ...extractKeywords(queryUsed, 6),
         ])]
       : isHousingMigrationTopic
@@ -1586,6 +1630,11 @@ export async function GET(
           ...(isFoodCartelTopic ? FOOD_CARTEL_TERMS : []),
           ...extractKeywords(titleText, 8),
         ], 10)
+      : isCyberSecurityTopic
+      ? dedupeTerms([
+          ...CYBER_SECURITY_TERMS,
+          ...extractKeywords(titleText, 8),
+        ], 10)
       : isHousingMigrationTopic
       ? dedupeTerms([
           ...HOUSING_MIGRATION_TERMS,
@@ -1600,9 +1649,18 @@ export async function GET(
           ].filter((term) => !isWeakRelevanceTerm(term)),
           10
         )
-    const entityAnchorTerms = (isCartelTopic || isHousingMigrationTopic) ? [] : dedupeTerms(extractEntityAnchorTerms(titleText, 6), 6)
+    const rawEntityAnchorTerms = (isCartelTopic || isHousingMigrationTopic || isCyberSecurityTopic)
+      ? []
+      : dedupeTerms(extractEntityAnchorTerms(titleText, 6), 6)
+    const specificEntityAnchorTerms = rawEntityAnchorTerms.filter(
+      (term) => !GENERIC_ENTITY_ANCHOR_TERMS.has(term.toLowerCase())
+    )
+    const entityAnchorTerms = specificEntityAnchorTerms.length > 0 ? specificEntityAnchorTerms : rawEntityAnchorTerms
 
-    const minScoreBase = relevanceTerms.length >= 8 ? 2 : 1
+    const hasSpecificEntityAnchor = specificEntityAnchorTerms.length > 0
+    const minScoreBase = hasSpecificEntityAnchor
+      ? Math.max(relevanceTerms.length >= 8 ? 2 : 1, 2)
+      : (relevanceTerms.length >= 8 ? 2 : 1)
     const minScore = isHousingMigrationTopic
       ? 1
       : (channelNewsMode === 'strict' ? Math.max(minScoreBase + 1, 3) : minScoreBase)
@@ -1636,11 +1694,11 @@ export async function GET(
       } else if (summaryBasisTerms.length > 0 && a._summaryBasisScore < 1) {
         return false
       }
-      if (isCartelTopic || isHousingMigrationTopic) return true
+      if (isCartelTopic || isHousingMigrationTopic || isCyberSecurityTopic) return true
       if (strongAnchorTerms.length === 0) return true
       return a._anchorScore >= minAnchorScore
     })
-    if (!isCartelTopic && !isHousingMigrationTopic && entityAnchorTerms.length > 0) {
+    if (!isCartelTopic && !isHousingMigrationTopic && !isCyberSecurityTopic && entityAnchorTerms.length > 0) {
       relevant = relevant.filter((a) => {
         const t = a.title.toLowerCase().replace(/\s+/g, '')
         return entityAnchorTerms.some((term) => t.includes(term))
@@ -1660,11 +1718,34 @@ export async function GET(
       // 주거이동 토픽은 매체별 표현 편차가 커서 점수 0~1 기사도 상위 일부 허용
       relevant = scored.filter((a) => a._score >= 1).slice(0, 8)
     }
-    if (!isCartelTopic && !isHousingMigrationTopic && relevant.length === 0 && scored.length > 0) {
+    if (isCyberSecurityTopic) {
+      relevant = relevant.filter((a) => {
+        const t = a.title.toLowerCase().replace(/\s+/g, '')
+        const hasCyber = CYBER_SECURITY_TERMS.some((k) => t.includes(k))
+        const hasHousingNoise = HOUSING_MIGRATION_TERMS.some((k) => t.includes(k))
+        return hasCyber && !hasHousingNoise
+      })
+    }
+    if (!isCartelTopic && !isHousingMigrationTopic && !isCyberSecurityTopic && relevant.length === 0 && scored.length > 0) {
       // 일반 토픽에서 과도한 필터로 0건이 되는 경우, 제목/요약 기반 최소 매칭 기사 일부 허용
       relevant = scored
         .filter((a) => a._score >= 1 && (a._titleBasisScore >= 1 || a._summaryBasisScore >= 1))
         .slice(0, 6)
+    }
+    if (!isCartelTopic && !isHousingMigrationTopic && !isCyberSecurityTopic && relevant.length > 0 && relevant.length < 4) {
+      // 일반 토픽에서 1~3건만 남는 경우, 같은 주제축(제목/요약 기반)을 유지하며 최소 4건까지 보강
+      const existingLinks = new Set(relevant.map((a) => a.link))
+      const supplement = scored
+        .filter((a) => !existingLinks.has(a.link))
+        .filter((a) => a._score >= 1 && (a._titleBasisScore >= 1 || a._summaryBasisScore >= 1))
+        .filter((a) => {
+          if (entityAnchorTerms.length === 0) return true
+          const t = a.title.toLowerCase().replace(/\s+/g, '')
+          const hasEntityAnchor = entityAnchorTerms.some((term) => t.includes(term))
+          return hasEntityAnchor || a._anchorScore >= 1
+        })
+        .slice(0, 4 - relevant.length)
+      relevant = [...relevant, ...supplement]
     }
     articles = shouldSuppressNewsByChannel
       ? []

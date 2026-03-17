@@ -28,6 +28,7 @@ export interface Video {
   published_at: string;
   duration_text?: string;
   duration_seconds?: number;
+  like_count?: number | null;
   video_url: string;
   transcript_status: 'pending' | 'extracted' | 'failed' | 'not_available' | null;
   transcript_text?: string;
@@ -53,6 +54,14 @@ export interface VideoFavorite {
   youtube_video_id: string;
   is_favorite: boolean;
   updated_at: string;
+}
+
+export interface TranscriptUsageEvent {
+  id: string;
+  provider: string;
+  youtube_video_id: string;
+  status: 'ready' | 'pending' | 'not_available' | 'failed' | 'blocked';
+  created_at: string;
 }
 
 export interface ChannelSubscriptionDemo {
@@ -115,6 +124,9 @@ export interface YouTubeVideo {
   };
   status?: {
     caption?: 'true' | 'false';
+  };
+  statistics?: {
+    likeCount?: string;
   };
 }
 

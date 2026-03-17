@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { videoRepository } from '@/lib/supabase/videos'
-import { geminiSummarizer } from '@/lib/summarization/gemini-summarizer'
+import { summaryService } from '@/lib/summarization/summary-service'
 
 export async function POST(
   request: NextRequest,
@@ -12,6 +12,9 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { videoId } = await params
+    const body = await request.json().catch(() => ({}))
+    const force = Boolean(body?.force)
+    const useTranscriptPipeline = body?.useTranscriptPipeline !== false
 
     if (!videoId) {
       return NextResponse.json({ success: false, error: 'Video ID is required' }, { status: 400 })
@@ -24,8 +27,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Video not found' }, { status: 404 })
     }
 
-    // Check if summary already exists
-    if (video.summary_text && video.summary_status === 'complete') {
+    // Fast path: cached summary
+    if (!force && video.summary_text && video.summary_status === 'complete') {
       return NextResponse.json(
         {
           success: true,
@@ -37,59 +40,28 @@ export async function POST(
       )
     }
 
-    // Check if transcript exists
-    if (!video.transcript_text) {
+    const result = await summaryService.getSummary(
+      videoId,
+      video.title || '',
+      video.description || '',
+      useTranscriptPipeline,
+      force
+    )
+
+    if (!result) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'No transcript available for summarization',
-          status: 'no_transcript',
-        },
-        { status: 400 }
-      )
-    }
-
-    // Check if Gemini is available
-    if (!geminiSummarizer.isAvailable()) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Gemini API not configured (GEMINI_API_KEY not set)',
-          status: 'no_api_key',
-        },
-        { status: 503 }
-      )
-    }
-
-    // Mark as pending
-    await videoRepository.updateSummary(videoId, '', 'transcript', 'pending')
-
-    // Generate summary
-    const summary = await geminiSummarizer.summarizeTranscript(video.transcript_text)
-
-    if (!summary) {
-      // Mark as failed
-      await videoRepository.updateSummary(videoId, '', 'transcript', 'failed')
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Failed to generate summary',
-          status: 'failed',
-        },
+        { success: false, error: 'Failed to generate summary', status: 'failed' },
         { status: 500 }
       )
     }
 
-    // Save summary
-    await videoRepository.updateSummary(videoId, summary, 'transcript', 'complete')
-
     return NextResponse.json(
       {
         success: true,
-        summary,
-        sourceType: 'transcript',
+        summary: result.text,
+        sourceType: result.sourceType,
         status: 'complete',
+        source: force ? 'refreshed' : 'generated',
       },
       { status: 200 }
     )

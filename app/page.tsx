@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Heart, RefreshCw, ExternalLink } from 'lucide-react'
+import { Heart, RefreshCw, ExternalLink, ArrowUpDown } from 'lucide-react'
 import { Channel, Video } from '@/types'
 import { channelRepository } from '@/lib/supabase/channels'
-import { videoRepository, videoFavoriteRepository } from '@/lib/supabase/videos'
+import { videoRepository, videoFavoriteRepository, videoNoteRepository } from '@/lib/supabase/videos'
 import { MOCK_CHANNELS, MOCK_VIDEOS } from '@/lib/mock-data'
 import AppShell from '@/components/AppShell'
 import EmptyState from '@/components/EmptyState' 
@@ -42,8 +42,17 @@ interface NewsChannelItem {
   videoUrl: string
 }
 
-type ChannelStockMode = 'auto' | 'strict' | 'off' | 'low_stock'
+interface ChannelVideoItem {
+  youtubeVideoId: string
+  title: string
+  channelTitle: string
+  publishedAt: string
+  videoUrl: string
+}
+
 type ChannelNewsMode = 'auto' | 'strict' | 'off'
+type SidebarChannelGroup = 'news' | 'finance' | 'real_estate' | 'tech' | 'lifestyle' | 'etc'
+type VideoSortMode = 'latest' | 'interest'
 
 export default function DashboardPage() {
   const panelMaxHeight = 'calc(100vh - 64px)'
@@ -53,9 +62,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([])
+  const [videoSortMode, setVideoSortMode] = useState<VideoSortMode>('latest')
   const [visibleCount, setVisibleCount] = useState(20)
   const [isSummaryLoading, setIsSummaryLoading] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  const [noteTextByVideoId, setNoteTextByVideoId] = useState<Record<string, string>>({})
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
   const [refreshStatus, setRefreshStatus] = useState<RefreshStatus>({
     lastRefreshed: null,
@@ -72,9 +83,13 @@ export default function DashboardPage() {
   const [overseasNewsItems, setOverseasNewsItems] = useState<NewsChannelItem[]>([])
   const [newsPanelLoading, setNewsPanelLoading] = useState(false)
   const [newsPanelError, setNewsPanelError] = useState('')
+  const [relatedVideoRefreshTokenById, setRelatedVideoRefreshTokenById] = useState<Record<string, number>>({})
+  const [externalChannelVideosById, setExternalChannelVideosById] = useState<Record<string, ChannelVideoItem[]>>({})
+  const [externalChannelVideoLoadingById, setExternalChannelVideoLoadingById] = useState<Record<string, boolean>>({})
+  const [externalChannelVideoErrorById, setExternalChannelVideoErrorById] = useState<Record<string, string>>({})
   const prevLastRefreshed = useRef<string | null>(null)
 
-  const { filteredVideos } = useVideoFilter(videos)
+  const { filteredVideos, filterText, setFilterText } = useVideoFilter(videos)
   const { enableTranscriptPipeline } = useSummaryPreferences()
   const channelTitleById = useMemo(
     () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.title])),
@@ -84,19 +99,6 @@ export default function DashboardPage() {
     () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.thumbnail_url || ''])),
     [channels]
   )
-  const channelModeById = useMemo(
-    () => new Map(
-      channels.map((channel) => [
-        channel.youtube_channel_id,
-        {
-          stock: (channel.stock_mode || 'auto') as ChannelStockMode,
-          news: (channel.news_mode || 'auto') as ChannelNewsMode,
-        },
-      ])
-    ),
-    [channels]
-  )
-
   useEffect(() => { loadData() }, [])
 
   // 60초마다 refresh 상태 폴링
@@ -143,7 +145,7 @@ export default function DashboardPage() {
   const getChannelDisplayName = (video: Video) =>
     video.channel_title || channelTitleById.get(video.youtube_channel_id) || '채널 정보 없음'
   const getChannelModes = (video: Video) =>
-    channelModeById.get(video.youtube_channel_id) || { stock: 'auto' as ChannelStockMode, news: 'auto' as ChannelNewsMode }
+    ({ stock: 'auto' as const, news: 'auto' as ChannelNewsMode })
   const getEmptyNewsMessage = (video: Video) => {
     const { news } = getChannelModes(video)
     if (news === 'off') return '관련 기사를 보려면 설정에서 기사 모드를 auto로 바꿔주세요.'
@@ -156,12 +158,52 @@ export default function DashboardPage() {
     if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleDateString('ko-KR')
   }
-
+  const refreshRelatedVideos = (videoId: string) => {
+    setRelatedVideoRefreshTokenById((prev) => ({
+      ...prev,
+      [videoId]: (prev[videoId] || 0) + 1,
+    }))
+    const target = videos.find((v) => v.youtube_video_id === videoId)
+    if (target?.youtube_channel_id) {
+      void loadExternalChannelVideos(target.youtube_channel_id, videoId, true)
+    }
+  }
+  const loadExternalChannelVideos = async (
+    channelId: string,
+    currentVideoId: string,
+    refresh = false
+  ) => {
+    if (!channelId) return
+    if (!refresh && externalChannelVideosById[channelId]) return
+    setExternalChannelVideoLoadingById((prev) => ({ ...prev, [channelId]: true }))
+    setExternalChannelVideoErrorById((prev) => ({ ...prev, [channelId]: '' }))
+    try {
+      const url = `/api/channels/${encodeURIComponent(channelId)}/videos?exclude=${encodeURIComponent(currentVideoId)}&limit=10`
+      const res = await fetch(url, { cache: 'no-store' })
+      if (!res.ok) throw new Error('채널 영상을 불러오지 못했습니다.')
+      const data = await res.json()
+      const items = Array.isArray(data?.items) ? data.items : []
+      setExternalChannelVideosById((prev) => ({ ...prev, [channelId]: items }))
+    } catch (error) {
+      console.error(error)
+      const message = error instanceof Error ? error.message : '채널 영상을 불러오지 못했습니다.'
+      setExternalChannelVideoErrorById((prev) => ({ ...prev, [channelId]: message }))
+    } finally {
+      setExternalChannelVideoLoadingById((prev) => ({ ...prev, [channelId]: false }))
+    }
+  }
   const loadRelatedNews = async (
     videoId: string,
     cacheKey: string,
     refreshTarget: 'news' | 'stocks' | null = null
   ) => {
+    const targetVideo = videos.find((v) => v.youtube_video_id === videoId)
+    if (targetVideo && getChannelModes(targetVideo).news === 'off') {
+      setNewsByVideoId(prev => ({ ...prev, [videoId]: [] }))
+      setNewsCacheKeyByVideoId(prev => ({ ...prev, [videoId]: cacheKey }))
+      setNewsErrorByVideoId(prev => ({ ...prev, [videoId]: '' }))
+      return
+    }
     if (!refreshTarget && newsCacheKeyByVideoId[videoId] === cacheKey) return
     if (refreshTarget === 'stocks') {
       setStocksLoadingVideoId(videoId)
@@ -229,20 +271,27 @@ export default function DashboardPage() {
         setVideos(MOCK_VIDEOS)
         setSelectedVideoId(MOCK_VIDEOS[0]?.youtube_video_id ?? null)
         setFavoriteIds(new Set())
+        setNoteTextByVideoId({})
         setDomesticNewsItems([])
         setOverseasNewsItems([])
         return
       }
-      const [channelsData, videosData, favoritesData] = await Promise.all([
+      const [channelsData, videosData, favoritesData, notesData] = await Promise.all([
         channelRepository.getAll(),
         videoRepository.getAll(),
         videoFavoriteRepository.getAllFavorites(),
+        videoNoteRepository.getAll(),
       ])
       const validVideosData = videosData.filter(isValidStoredVideo)
       setChannels(channelsData)
       setVideos(validVideosData)
       setSelectedVideoId(validVideosData[0]?.youtube_video_id ?? null)
       setFavoriteIds(new Set(favoritesData.map(f => f.youtube_video_id)))
+      const notesMap: Record<string, string> = {}
+      for (const note of notesData) {
+        notesMap[note.youtube_video_id] = note.note || ''
+      }
+      setNoteTextByVideoId(notesMap)
       // DB에 캐시된 뉴스/종목 데이터로 초기화 (API 호출 불필요)
       const newsInit: Record<string, RelatedNewsItem[]> = {}
       const stocksInit: Record<string, StockSuggestion[]> = {}
@@ -265,6 +314,7 @@ export default function DashboardPage() {
       setVideos(MOCK_VIDEOS)
       setSelectedVideoId(MOCK_VIDEOS[0]?.youtube_video_id ?? null)
       setFavoriteIds(new Set())
+      setNoteTextByVideoId({})
       setDomesticNewsItems([])
       setOverseasNewsItems([])
     } finally {
@@ -340,15 +390,109 @@ export default function DashboardPage() {
     }
   }
 
+  const tokenize = (text: string): string[] => {
+    const stopwords = new Set([
+      '영상', '요약', '분석', '대한', '관련', '이야기', '정리', '오늘', '이번', '뉴스',
+      'the', 'and', 'for', 'with', 'that', 'this',
+    ])
+    return (text || '')
+      .toLowerCase()
+      .replace(/[^0-9a-z가-힣\s]/g, ' ')
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2 && !stopwords.has(token))
+  }
+
+  const interestTermWeights = useMemo(() => {
+    const positiveNoteTerms = ['최고', '강추', '유익', '추천', '좋음', '좋다', '인사이트']
+    const negativeNoteTerms = ['별로', '비추', '어그로', '별루', '실망', '싫']
+    const map = new Map<string, number>()
+
+    for (const video of videos) {
+      if (!favoriteIds.has(video.youtube_video_id)) continue
+      for (const token of tokenize(video.title)) {
+        map.set(token, (map.get(token) || 0) + 1)
+      }
+    }
+
+    for (const [videoId, note] of Object.entries(noteTextByVideoId)) {
+      if (!favoriteIds.has(videoId)) continue
+      const normalized = (note || '').toLowerCase()
+      const hasNegative = negativeNoteTerms.some((term) => normalized.includes(term))
+      if (hasNegative) continue
+      const hasPositive = positiveNoteTerms.some((term) => normalized.includes(term))
+      const noteWeight = hasPositive ? 2 : 0.5
+      for (const token of tokenize(note || '')) {
+        map.set(token, (map.get(token) || 0) + noteWeight)
+      }
+    }
+
+    return map
+  }, [videos, favoriteIds, noteTextByVideoId])
+
   const sortedVideos = useMemo(() => {
     const base = selectedChannelIds.length > 0
       ? filteredVideos.filter(v => selectedChannelIds.includes(v.youtube_channel_id))
       : filteredVideos
-    return [...base].sort(
-      (a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
-    )
-  }, [filteredVideos, selectedChannelIds])
-
+    const list = [...base]
+    if (videoSortMode === 'interest') {
+      const profileWeightTotal = [...interestTermWeights.values()].reduce((acc, value) => acc + value, 0) || 1
+      const maxLike = Math.max(1, ...list.map((video) => Number(video.like_count || 0)))
+      const score = (video: Video) => {
+        const titleTokens = new Set(tokenize(video.title))
+        const keywordOverlapScore = [...titleTokens].reduce(
+          (acc, token) => acc + (interestTermWeights.get(token) || 0),
+          0
+        )
+        const keywordSimilarity = Math.min(1, keywordOverlapScore / Math.max(6, profileWeightTotal * 0.35))
+        const likeCount = Math.max(0, Number(video.like_count || 0))
+        const normalizedLikeScore = Math.log10(1 + likeCount) / Math.log10(1 + maxLike)
+        return keywordSimilarity * 0.7 + normalizedLikeScore * 0.3
+      }
+      return list.sort((a, b) => score(b) - score(a))
+    }
+    return list.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
+  }, [filteredVideos, selectedChannelIds, videoSortMode, interestTermWeights])
+  const weeklyVideoCount = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return videos.filter((video) => new Date(video.published_at).getTime() >= weekAgo).length
+  }, [videos])
+  const relatedVideoRecommendationsById = useMemo(() => {
+    const recommendationMap = new Map<string, Video[]>()
+    const normalize = (value?: string | null) =>
+      (value || '')
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/[^\p{L}\p{N}]/gu, '')
+    const isSameChannel = (current: Video, candidate: Video) => {
+      if (candidate.youtube_video_id === current.youtube_video_id) return false
+      if (
+        current.youtube_channel_id &&
+        candidate.youtube_channel_id &&
+        current.youtube_channel_id === candidate.youtube_channel_id
+      ) return true
+      const currentName = normalize(getChannelDisplayName(current))
+      const candidateName = normalize(getChannelDisplayName(candidate))
+      if (!currentName || !candidateName) return false
+      if (currentName === candidateName) return true
+      if (currentName.length >= 4 && candidateName.includes(currentName)) return true
+      if (candidateName.length >= 4 && currentName.includes(candidateName)) return true
+      return false
+    }
+    for (const current of sortedVideos) {
+      const refreshToken = relatedVideoRefreshTokenById[current.youtube_video_id] || 0
+      const related = sortedVideos.filter((candidate) => isSameChannel(current, candidate))
+      const rotated = related.length > 1
+        ? [
+            ...related.slice(refreshToken % related.length),
+            ...related.slice(0, refreshToken % related.length),
+          ]
+        : related
+      const limited = rotated.slice(0, 5)
+      recommendationMap.set(current.youtube_video_id, limited)
+    }
+    return recommendationMap
+  }, [sortedVideos, relatedVideoRefreshTokenById, channelTitleById])
   const selectedVideo = useMemo(() =>
     sortedVideos.find(v => v.youtube_video_id === selectedVideoId) ?? null,
     [sortedVideos, selectedVideoId]
@@ -366,9 +510,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!selectedVideo) return
+    if (getChannelModes(selectedVideo).news === 'off') {
+      setNewsByVideoId(prev => ({ ...prev, [selectedVideo.youtube_video_id]: [] }))
+      return
+    }
     const cacheKey = `${selectedVideo.summary_text || ''}|${selectedVideo.title || ''}`
     void loadRelatedNews(selectedVideo.youtube_video_id, cacheKey)
   }, [selectedVideo?.youtube_video_id, selectedVideo?.summary_text]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!selectedVideo?.youtube_channel_id || !selectedVideo?.youtube_video_id) return
+    void loadExternalChannelVideos(selectedVideo.youtube_channel_id, selectedVideo.youtube_video_id)
+  }, [selectedVideo?.youtube_channel_id, selectedVideo?.youtube_video_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleChannelGroupChanged = async (channelId: string, group: SidebarChannelGroup) => {
+    const prevChannels = channels
+    setChannels((prev) =>
+      prev.map((channel) =>
+        channel.youtube_channel_id === channelId ? { ...channel, channel_group: group } : channel
+      )
+    )
+    const result = await channelRepository.updateChannelGroup(channelId, group)
+    if (!result.success) {
+      console.error('채널 분류 변경 실패:', result.message || 'unknown_error')
+      setChannels(prevChannels)
+    }
+  }
 
   const shellProps = {
     channels,
@@ -380,6 +547,7 @@ export default function DashboardPage() {
     onChannelSelected: (id: string) => setSelectedChannelIds(prev =>
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     ),
+    onChannelGroupChanged: handleChannelGroupChanged,
     onChannelClearFilter: () => setSelectedChannelIds([]),
     selectedChannelIds,
     newVideoCount:     refreshStatus?.newVideoCount ?? 0,
@@ -389,21 +557,48 @@ export default function DashboardPage() {
   const renderVideoDetail = (video: Video) => (
     <div className="space-y-3.5">
       {(() => {
+        const modes = getChannelModes(video)
+        const localCandidates = relatedVideoRecommendationsById.get(video.youtube_video_id) || []
+        const externalCandidates = externalChannelVideosById[video.youtube_channel_id] || []
+        const mergedCandidates = [
+          ...localCandidates.map((candidate) => ({
+            youtubeVideoId: candidate.youtube_video_id,
+            title: candidate.title,
+            videoUrl: `https://youtube.com/watch?v=${candidate.youtube_video_id}`,
+          })),
+          ...externalCandidates.map((candidate) => ({
+            youtubeVideoId: candidate.youtubeVideoId,
+            title: candidate.title,
+            videoUrl: candidate.videoUrl,
+          })),
+        ]
+        const dedupedCandidates = Array.from(
+          new Map(
+            mergedCandidates
+              .filter((candidate) => candidate.youtubeVideoId !== video.youtube_video_id)
+              .map((candidate) => [candidate.youtubeVideoId, candidate] as const)
+          ).values()
+        )
+        const isExternalLoading = !!externalChannelVideoLoadingById[video.youtube_channel_id]
+        const externalError = externalChannelVideoErrorById[video.youtube_channel_id]
         return (
           <>
-      <div className="flex items-start justify-between gap-3 pb-1 border-b border-slate-200">
+      <div className="flex items-start justify-between gap-3 pb-1 border-b border-slate-100">
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem]">
             {video.title}
           </h2>
           <div className="mt-1 flex items-center gap-1.5 text-xs min-h-[1rem]">
             {isNewVideo(video) && (
-              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded font-semibold">New</span>
+              <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded font-semibold text-[10px]">NEW</span>
             )}
             <span className="text-gray-500">
-              {new Date(video.created_at).toLocaleString('ko-KR', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
+              {new Date(video.published_at).toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
               })}
             </span>
           </div>
@@ -425,7 +620,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="space-y-2.5">
-        <div className="border border-slate-200 bg-white rounded-xl overflow-hidden">
+        <div className="border border-slate-100 bg-white rounded-xl overflow-hidden shadow-sm">
           <iframe
             src={`https://www.youtube.com/embed/${video.youtube_video_id}`}
             className="w-full aspect-video"
@@ -433,7 +628,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="border border-slate-200 bg-white rounded-xl p-4">
+        <div className="border border-slate-100 bg-slate-50/50 rounded-xl p-4">
           <h3 className="ui-title-sm text-gray-800 mb-2">영상 요약</h3>
           {video.transcript_status === 'not_available' ? (
             <p className="ui-text-body text-gray-500">아직 자막을 추출할 수 없습니다.</p>
@@ -452,7 +647,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex">
           <button
             onClick={() => handleRefreshSummary(video.youtube_video_id)}
             disabled={isSummaryLoading}
@@ -468,28 +663,21 @@ export default function DashboardPage() {
               ? '요약 다시 시도'
               : '요약 생성'}
           </button>
-          <a
-            href={`https://youtube.com/watch?v=${video.youtube_video_id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="ui-btn"
-          >
-            유튜브 보기
-          </a>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="border border-slate-200 bg-white rounded-xl p-4">
+        <div className="border border-slate-100 bg-white rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="ui-title-sm text-gray-800">관련 뉴스</h3>
+            <h3 className="ui-title-sm text-gray-800">관련 뉴스 보기</h3>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   const cacheKey = `${video.summary_text || ''}|${video.title || ''}`
                   void loadRelatedNews(video.youtube_video_id, cacheKey, 'news')
                 }}
-                className="ui-btn-ghost-icon"
+                disabled={modes.news === 'off'}
+                className="ui-btn-ghost-icon disabled:opacity-40"
                 title="관련 뉴스 새로고침"
                 aria-label="관련 뉴스 새로고침"
               >
@@ -506,28 +694,24 @@ export default function DashboardPage() {
               <p className="ui-text-body text-gray-500">{getEmptyNewsMessage(video)}</p>
             ) : (
               <div className="space-y-2">
-                {(newsByVideoId[video.youtube_video_id] || []).slice(0, 4).map((article, idx) => (
+                {(newsByVideoId[video.youtube_video_id] || []).slice(0, 3).map((article, idx) => (
                   <div
                     key={`${article.link}-${idx}`}
-                    className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                    className="block h-[86px] rounded-lg border border-slate-100 px-3 py-2 hover:bg-indigo-50/50 transition-colors"
                   >
-                    <div className="flex items-start gap-2">
-                      <a
-                        href={article.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 min-w-0 flex items-start justify-between gap-2"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="ui-title-md text-gray-900 line-clamp-2">{article.title}</p>
-                          <p className="mt-1 ui-text-meta text-gray-500">
-                            {article.source}
-                            {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
-                          </p>
-                        </div>
-                        <ExternalLink size={13} className="text-gray-400 shrink-0 mt-0.5" />
-                      </a>
-                    </div>
+                    <a
+                      href={article.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="relative block h-full pr-5"
+                    >
+                      <p className="ui-title-md text-gray-900 line-clamp-2 leading-snug">{article.title}</p>
+                      <p className="absolute left-0 right-5 bottom-0 ui-text-meta text-gray-500 truncate">
+                        {article.source}
+                        {formatPublishedDate(article.publishedAt) ? ` · ${formatPublishedDate(article.publishedAt)}` : ''}
+                      </p>
+                      <ExternalLink size={13} className="absolute right-0 bottom-0.5 text-gray-400" />
+                    </a>
                   </div>
                 ))}
               </div>
@@ -535,42 +719,39 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="border border-slate-200 bg-white rounded-xl p-4">
+        <div className="border border-slate-100 bg-white rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="ui-title-sm text-gray-800">관련 영상 추천</h3>
+            <h3 className="ui-title-sm text-gray-800">다른 영상 보기</h3>
             <button
-              onClick={() => void loadData()}
+              onClick={() => refreshRelatedVideos(video.youtube_video_id)}
               className="ui-btn-ghost-icon"
-              title="관련 영상 새로고침"
-              aria-label="관련 영상 새로고침"
+              title="다른 영상 새로고침"
+              aria-label="다른 영상 새로고침"
             >
               <RefreshCw size={14} />
             </button>
           </div>
           <div className="space-y-2">
-            {sortedVideos
-              .filter((candidate) =>
-                candidate.youtube_video_id !== video.youtube_video_id &&
-                candidate.youtube_channel_id === video.youtube_channel_id
-              )
-              .slice(0, 5)
-              .map((candidate) => (
+            {dedupedCandidates.slice(0, 6).map((candidate) => (
                 <a
-                  key={candidate.youtube_video_id}
-                  href={`https://youtube.com/watch?v=${candidate.youtube_video_id}`}
+                  key={candidate.youtubeVideoId}
+                  href={candidate.videoUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-indigo-50/50 transition-colors"
                 >
                   <span className="ui-title-md text-gray-900 line-clamp-1 flex-1 min-w-0">{candidate.title}</span>
                   <ExternalLink size={13} className="text-gray-400 shrink-0" />
                 </a>
               ))}
-            {sortedVideos.filter((candidate) =>
-              candidate.youtube_video_id !== video.youtube_video_id &&
-              candidate.youtube_channel_id === video.youtube_channel_id
-            ).length === 0 ? (
-              <p className="ui-text-body text-gray-500">추천할 관련 영상이 없습니다.</p>
+            {isExternalLoading ? (
+              <p className="ui-text-body text-gray-500 animate-pulse">채널의 다른 영상을 불러오는 중...</p>
+            ) : null}
+            {!isExternalLoading && externalError ? (
+              <p className="ui-text-body text-gray-500">{externalError}</p>
+            ) : null}
+            {!isExternalLoading && !externalError && dedupedCandidates.length === 0 ? (
+              <p className="ui-text-body text-gray-500">같은 채널의 다른 영상이 데이터에 없습니다.</p>
             ) : null}
           </div>
         </div>
@@ -591,7 +772,7 @@ export default function DashboardPage() {
 
         {/* ── 좌측: 영상 목록 ──────────────────────────────────────────── */}
         <div
-          className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] overflow-y-auto"
+          className="border border-slate-100 rounded-2xl bg-white shadow-[0_1px_4px_rgba(16,24,40,0.06)] overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
           onScroll={(e) => {
             const el = e.currentTarget
@@ -599,6 +780,40 @@ export default function DashboardPage() {
               setVisibleCount(v => v + 20)
           }}
         >
+          <div className="sticky top-0 z-10 border-b border-slate-100 bg-white px-3 py-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-600 truncate">
+                나의 구독 영상 (7일간 {weeklyVideoCount}개 영상)
+              </p>
+              <label className="inline-flex items-center gap-1 text-xs text-slate-500">
+                <ArrowUpDown size={12} />
+                <span>정렬</span>
+                <select
+                  value={videoSortMode}
+                  onChange={(e) => {
+                    setVideoSortMode(e.target.value as VideoSortMode)
+                    setVisibleCount(20)
+                  }}
+                  className="h-7 rounded-md border border-slate-300 px-1.5 text-xs text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value="interest">관심도</option>
+                  <option value="latest">최신</option>
+                </select>
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={filterText}
+                onChange={(e) => {
+                  setFilterText(e.target.value)
+                  setVisibleCount(20)
+                }}
+                placeholder="제목 검색하기"
+                className="h-8 flex-1 rounded-lg border border-slate-300 px-2.5 text-sm text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
+          </div>
           {sortedVideos.length === 0 ? (
             <div className="p-10 text-center text-sm text-gray-400">영상이 없습니다</div>
           ) : (
@@ -624,8 +839,8 @@ export default function DashboardPage() {
                   }
                   className={`dashboard-video-item group
                     w-full text-left px-3 py-3 transition-colors cursor-pointer
-                    ${idx !== 0 ? 'border-t border-slate-200' : ''}
-                    ${isSelected ? 'dashboard-video-selected border-l-4 pl-2.5 bg-slate-100/70' : 'hover:bg-slate-50/80'}
+                    ${idx !== 0 ? 'border-t border-slate-100' : ''}
+                    ${isSelected ? 'dashboard-video-selected border-l-4 pl-2.5' : 'hover:bg-slate-50/80'}
                   `}
                 >
                   <div className="flex-1 min-w-0">
@@ -682,7 +897,7 @@ export default function DashboardPage() {
 
         {/* ── 가운데: 영상 상세 ────────────────────────────────────────── */}
         <div
-          className="hidden xl:block border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-5 overflow-y-auto"
+          className="hidden xl:block border border-slate-100 rounded-2xl bg-white shadow-[0_1px_4px_rgba(16,24,40,0.06)] p-5 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           {selectedVideo ? (
@@ -697,7 +912,7 @@ export default function DashboardPage() {
 
         {/* ── 우측: 뉴스 채널 최신 제목 ───────────────────────────────── */}
         <aside
-          className="border border-slate-200 rounded-2xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)] p-3.5 xl:sticky xl:top-24 overflow-y-auto"
+          className="border border-slate-100 rounded-2xl bg-white shadow-[0_1px_4px_rgba(16,24,40,0.06)] p-3.5 xl:sticky xl:top-24 overflow-y-auto"
           style={{ maxHeight: panelMaxHeight }}
         >
           <div className="flex items-center justify-between gap-2">
@@ -730,7 +945,7 @@ export default function DashboardPage() {
                       href={item.videoUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors"
+                      className="block rounded-lg px-2 py-1 hover:bg-indigo-50 transition-colors"
                     >
                       <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">• {item.title}</p>
                     </a>
@@ -750,7 +965,7 @@ export default function DashboardPage() {
                       href={item.videoUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-lg px-2 py-1 hover:bg-gray-50 transition-colors"
+                      className="block rounded-lg px-2 py-1 hover:bg-indigo-50 transition-colors"
                     >
                       <p className="text-sm font-normal text-gray-700 line-clamp-1 flex-1 min-w-0">• {item.title}</p>
                     </a>

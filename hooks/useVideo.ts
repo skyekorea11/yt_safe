@@ -180,9 +180,7 @@ export function useVideoFilter(videos: Video[]) {
   const [selectedChannels, setSelectedChannels] = useState<string[]>([])
 
   const filteredVideos = videos.filter((video) => {
-    const matchesText =
-      video.title.toLowerCase().includes(filterText.toLowerCase()) ||
-      video.description.toLowerCase().includes(filterText.toLowerCase())
+    const matchesText = video.title.toLowerCase().includes(filterText.toLowerCase())
 
     const matchesChannel = selectedChannels.length === 0 || selectedChannels.includes(video.youtube_channel_id)
 

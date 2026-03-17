@@ -244,7 +244,7 @@ export const youtubeService = {
     }
 
     try {
-      const url = `${BASE_URL}/videos?key=${API_KEY}&id=${videoIds.join(',')}&part=snippet,contentDetails,status`
+      const url = `${BASE_URL}/videos?key=${API_KEY}&id=${videoIds.join(',')}&part=snippet,contentDetails,status,statistics`
       const response = await fetch(url)
       const data = (await response.json()) as { items?: YouTubeVideo[] } | YouTubeErrorResponse
 

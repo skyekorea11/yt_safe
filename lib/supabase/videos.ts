@@ -1,5 +1,5 @@
 import { supabase } from './client'
-import { Video, VideoNote, VideoFavorite } from '@/types'
+import { TranscriptUsageEvent, Video, VideoNote, VideoFavorite } from '@/types'
 
 /**
  * Video repository for CRUD operations
@@ -126,17 +126,33 @@ export const videoRepository = {
    */
   async upsert(video: Partial<Video> & { youtube_video_id: string; youtube_channel_id: string }): Promise<Video | null> {
     try {
-      const { data, error } = await supabase
-        .from('videos')
-        .upsert(
-          {
-            ...video,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'youtube_video_id' }
-        )
-        .select()
-        .single()
+      const payload = {
+        ...video,
+        updated_at: new Date().toISOString(),
+      } as Record<string, unknown>
+
+      const attemptUpsert = async (row: Record<string, unknown>) => {
+        return supabase
+          .from('videos')
+          .upsert(row, { onConflict: 'youtube_video_id' })
+          .select()
+          .single()
+      }
+
+      let { data, error } = await attemptUpsert(payload)
+
+      // Backward compatibility: if DB has not yet migrated `like_count`, retry without it.
+      if (error && typeof error === 'object') {
+        const e = error as { code?: string; message?: string; details?: string }
+        const lower = `${e.message || ''} ${e.details || ''}`.toLowerCase()
+        if ((e.code === 'PGRST204' || lower.includes('like_count') || lower.includes('column')) && 'like_count' in payload) {
+          const retryPayload = { ...payload }
+          delete retryPayload.like_count
+          const retried = await attemptUpsert(retryPayload)
+          data = retried.data
+          error = retried.error
+        }
+      }
 
       if (error) throw error
       return data || null
@@ -302,10 +318,67 @@ export const videoRepository = {
   },
 }
 
+export const transcriptUsageRepository = {
+  async log(
+    provider: string,
+    youtubeVideoId: string,
+    status: TranscriptUsageEvent['status']
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('transcript_usage_events')
+        .insert({
+          provider,
+          youtube_video_id: youtubeVideoId,
+          status,
+        })
+
+      if (error) throw error
+      return true
+    } catch (error) {
+      console.error('Error logging transcript usage event:', error)
+      return false
+    }
+  },
+
+  async countSince(provider: string, sinceIso: string): Promise<number | null> {
+    try {
+      const { count, error } = await supabase
+        .from('transcript_usage_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('provider', provider)
+        .gte('created_at', sinceIso)
+
+      if (error) throw error
+      return count ?? 0
+    } catch (error) {
+      console.error('Error counting transcript usage events:', error)
+      return null
+    }
+  },
+}
+
 /**
  * Video notes repository
  */
 export const videoNoteRepository = {
+  /**
+   * Get all notes
+   */
+  async getAll(): Promise<VideoNote[]> {
+    try {
+      const { data, error } = await supabase
+        .from('video_notes')
+        .select('*')
+
+      if (error) throw error
+      return data || []
+    } catch (error) {
+      console.error('Error fetching all notes:', error)
+      return []
+    }
+  },
+
   /**
    * Get note for a video
    */

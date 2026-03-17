@@ -6,13 +6,225 @@ import { buildHeuristicSummary, chunkTranscript, cleanTranscript, ensureKoreanSu
 /**
  * Summary service orchestrates transcript extraction and summarization
  */
+const DISCLAIMER_SENTENCE_PATTERN =
+  /(translated\s+by|disclaimer|저작권|copyright|public\s+good|educational\s+purposes?|revenue\s+generated|youtube\s+at\s+all|we\s+check|korean\s+subtitles|original\s+copyright\s+holder|if\s+you.*correction|for\s+information\s+purposes|for\s+entertainment\s+purposes|not\s+financial\s+advice|법적\s+책임|무단\s+전재|재배포|rights?\s+reserved)/i
 
 export const summaryService = {
+  finalizeSummaryText(text: string, maxLines = 5, maxTotalChars = 500): string {
+    const cleaned = this.sanitizeSummaryText(text)
+    if (!cleaned) return ''
+
+    const sentenceLike = cleaned
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => s.replace(/\s+/g, ' '))
+
+    const boilerplateSentence = /(핵심\s+질문과\s+판단\s+포인트|단일\s+결론을\s+제시하기보다|조건별로\s+쟁점을\s+나누어|자신의\s+상황에\s+맞춰|단편\s+정보보다\s+맥락과\s+리스크)/i
+    const deduped: string[] = []
+    const seen = new Set<string>()
+    for (const raw of sentenceLike) {
+      let line = raw
+      if (boilerplateSentence.test(line)) continue
+      line = line.replace(/^영상\s*설명에서는\s*/, '영상 설명에서는 ')
+      if (line.length > 180) {
+        line = `${line.slice(0, 180).replace(/\s+\S*$/, '').trim()}...`
+      }
+      const key = line.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      if (!/[.!?]$/.test(line)) line = `${line}.`
+      deduped.push(line)
+      if (deduped.length >= maxLines) break
+    }
+
+    const selected: string[] = []
+    let total = 0
+    for (const line of deduped) {
+      const next = total + line.length + (selected.length > 0 ? 1 : 0)
+      if (next > maxTotalChars) break
+      selected.push(line)
+      total = next
+    }
+
+    if (selected.length > 0) return selected.join('\n').trim()
+    return this.clampSummaryLines(cleaned, maxLines, 180, maxTotalChars)
+  },
+
+  isLikelyEnglishTranscript(text: string): boolean {
+    const sample = (text || '').slice(0, 5000)
+    if (!sample) return false
+    const hangul = (sample.match(/[가-힣]/g) || []).length
+    const latin = (sample.match(/[A-Za-z]/g) || []).length
+    if (latin < 40) return false
+    const total = hangul + latin
+    if (total === 0) return false
+    return latin / total >= 0.75
+  },
+
+  async translateEnglishTranscriptToKorean(text: string): Promise<string | null> {
+    const apiKey = process.env.GEMINI_API_KEY || ''
+    if (!apiKey) return null
+
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+    const chunks = chunkTranscript(text, 1800).slice(0, 6)
+    if (chunks.length === 0) return null
+
+    const translatedParts: string[] = []
+    for (const chunk of chunks) {
+      try {
+        const prompt = [
+          '다음은 유튜브 자동 생성 영어 자막입니다.',
+          '의미를 유지해 자연스러운 한국어 문장으로 번역하세요.',
+          '불필요한 면책/저작권/홍보 문구는 제외하고, 본문 내용만 번역하세요.',
+          '',
+          chunk,
+        ].join('\n')
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+            }),
+          }
+        )
+
+        if (!response.ok) {
+          const errText = await response.text()
+          console.warn('[summary] transcript translation failed:', response.status, errText)
+          continue
+        }
+
+        const data = await response.json()
+        const out = data?.candidates?.[0]?.content?.parts?.[0]?.text
+        if (typeof out === 'string' && out.trim()) {
+          translatedParts.push(out.trim())
+        }
+      } catch (error) {
+        console.warn('[summary] transcript translation error:', error)
+      }
+    }
+
+    if (translatedParts.length === 0) return null
+    return cleanTranscript(translatedParts.join('\n'))
+  },
+
+  stripBoilerplateSentences(text: string): string {
+    const source = (text || '').trim()
+    if (!source) return ''
+    const hasKorean = /[가-힣]/.test(source)
+    const blocks = source
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+
+    const boilerplatePattern = new RegExp(
+      `${DISCLAIMER_SENTENCE_PATTERN.source}|contact.*@|sharing\\s+of\\s+ideas`,
+      'i'
+    )
+    const filtered = blocks.filter((part) => {
+      if (boilerplatePattern.test(part)) return false
+      // 한국어 요약에서 끼어드는 영어 고지 문장을 제거
+      if (hasKorean && !/[가-힣]/.test(part) && /[a-z]/i.test(part) && part.length >= 24) return false
+      return true
+    })
+
+    return filtered.join(' ').trim()
+  },
+
+  sanitizeSummaryText(text: string): string {
+    return this.stripBoilerplateSentences((text || '')
+      .replace(/(?:\bthe\b\s*-\s*){1,}/gi, ' ')
+      // Remove boilerplate translation/copyright disclaimers often injected by external summary pages.
+      .replace(/\btranslated\s+by\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:a\s+)?disclaimer\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:copyright|저작권)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bwe\s+check\s+the\s+copyright\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bwe\s+check\s+the\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bthe\s*-\s*we\s+check\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bthe\s+korean\s+subtitles?\s+of\s+the\s+video\s+were\s+added\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bwithin\s+the\s+scope\s+of\s+not\s+distorting\s+the\s+contents?\s+of\s+the\s+original\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bthe\s+purpose\s+of\s+this\s+video\s+is\s+only\s+for\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:for\s+educational\s+purposes\s+only|for\s+the\s+public\s+good)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:motivation|sharing\s+of\s+ideas)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:copyright\s+of\s+the\s+original\s+video\s+belongs\s+to\s+the\s+original\s+copyright\s+holder)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\b(?:there\s+is\s+no\s+revenue\s+generated\s+through\s+youtube\s+at\s+all)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/\bif\s+you[^.\n]*(?:correction|corrections|correct|fix)[^.\n]*[.\n]?/gi, ' ')
+      // Remove common production credits/contact/social tails that pollute summaries.
+      .replace(/\[[^\]]*(?:편집|촬영|자막|BGM|음원|협찬)[^\]]*\]/gi, ' ')
+      .replace(/\bwith\s+[a-z0-9._-]+\b/gi, ' ')
+      .replace(/\b(?:instagram|insta|kakaotalk|kakao\s*talk|email|mail|문의|섭외)\b[^.\n]*[.\n]?/gi, ' ')
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, ' ')
+      .replace(/(?:강연|방송)\s*섭외\s*문의[^.\n]*[.\n]?/gi, ' ')
+      .replace(/:[)D]|;\)|:-\)|:D/gi, ' ')
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/#[^\s#]+/g, ' ')
+      .replace(/\d{1,2}:\d{2}(?::\d{2})?/g, ' ')
+      .replace(/(구독(하기)?|좋아요|알림\s*설정|댓글|공유)\s*(을|도)?\s*(눌러|부탁|해|해주세요|부탁드립니다)?/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim())
+      .split(/(?<=[.!?])\s+|\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((s) => !DISCLAIMER_SENTENCE_PATTERN.test(s))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  },
+
+  clampSummaryLines(text: string, maxLines = 5, maxLineLength = 180, maxTotalChars = 500): string {
+    const normalized = this.sanitizeSummaryText(text)
+    if (!normalized) return ''
+
+    let units = normalized
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    // If model output is one overlong sentence, split by sentence punctuation first.
+    if (units.length <= 1) {
+      units = normalized
+        .split(/(?<=[.!?])\s+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    }
+
+    const normalizedUnits = units
+      .map((line) => {
+        let out = line.replace(/\s+/g, ' ').trim()
+        if (!out) return ''
+        if (!/[.!?]$/.test(out)) out = `${out}.`
+        if (out.length > maxLineLength) {
+          out = `${out.slice(0, maxLineLength).replace(/\s+\S*$/, '').trim()}...`
+        }
+        return out
+      })
+      .filter(Boolean)
+
+    const selected: string[] = []
+    let total = 0
+    for (const line of normalizedUnits) {
+      if (selected.length >= maxLines) break
+      const nextTotal = total + line.length + (selected.length > 0 ? 1 : 0)
+      if (nextTotal > maxTotalChars) break
+      selected.push(line)
+      total = nextTotal
+    }
+
+    if (selected.length > 0) return selected.join('\n').trim()
+    const fallback = normalized.slice(0, maxTotalChars).replace(/\s+\S*$/, '').trim()
+    return fallback ? `${fallback}...` : ''
+  },
+
   isSparseSummary(text: string): boolean {
     const trimmed = (text || '').trim()
     if (!trimmed) return true
     const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean)
-    return lines.length < 4 || trimmed.length < 140
+    return lines.length < 4 || trimmed.length < 280
   },
 
   buildExpandedDescriptionSummary(title: string, description: string): string {
@@ -20,10 +232,7 @@ export const summaryService = {
       .replace(/\[[^\]]+\]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-    const cleanDescription = (description || '')
-      .replace(/https?:\/\/\S+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
+    const cleanDescription = this.sanitizeSummaryText(description || '')
 
     const descriptionSnippet = cleanDescription
       ? (cleanDescription.length > 180
@@ -41,18 +250,44 @@ export const summaryService = {
       '결론적으로 단기적인 단편 정보보다 맥락과 리스크를 함께 보라는 실용적인 메시지를 전달합니다.',
     ]
 
-    return formatSummaryText(lines.join(' '), 5)
+    return this.clampSummaryLines(formatSummaryText(lines.join(' '), 5), 5, 180, 500)
   },
 
   ensureDescriptionSummaryQuality(summary: string, title: string, description: string): string {
-    if (!this.isSparseSummary(summary)) return summary
-    const expanded = this.buildExpandedDescriptionSummary(title, description)
-    if (!expanded) return summary
-    return formatSummaryText(`${summary}\n${expanded}`, 5)
+    const sanitized = this.sanitizeSummaryText(summary)
+    let normalized = formatSummaryText(sanitized, 5)
+
+    if (this.isSparseSummary(normalized)) {
+      const expanded = this.buildExpandedDescriptionSummary(title, description)
+      if (expanded) normalized = formatSummaryText(`${normalized}\n${expanded}`, 5)
+    }
+
+    const ensured = ensureKoreanSummary(normalized, `${title} ${description}`, 5) || normalized
+    return this.finalizeSummaryText(ensured, 5, 500)
+  },
+
+  ensureTranscriptSummaryQuality(
+    summary: string,
+    heuristicFromTranscript: string,
+    title: string,
+    description: string
+  ): string {
+    const sanitized = this.sanitizeSummaryText(summary)
+    let normalized = formatSummaryText(sanitized, 5)
+
+    if (this.isSparseSummary(normalized)) {
+      const heuristicSanitized = this.sanitizeSummaryText(heuristicFromTranscript)
+      const merged = `${normalized}\n${formatSummaryText(heuristicSanitized, 5)}`.trim()
+      normalized = formatSummaryText(merged, 5)
+    }
+
+    const ensured = ensureKoreanSummary(normalized, `${title} ${description}`, 5) || normalized
+    return this.finalizeSummaryText(ensured, 5, 500)
   },
 
   isExternalSummaryPreferred(): boolean {
-    return (process.env.EXTERNAL_SUMMARY_PRIORITY || 'true').toLowerCase() !== 'false'
+    // 기본값은 transcript 우선. 외부 요약은 fallback 보조로만 사용.
+    return (process.env.EXTERNAL_SUMMARY_PRIORITY || 'false').toLowerCase() === 'true'
   },
 
   isChunkedSummarizationEnabled(): boolean {
@@ -112,6 +347,12 @@ export const summaryService = {
       '회원가입',
       '무료로 시작',
       '서비스 소개',
+      'the purpose of this video is only for',
+      'for educational purposes only',
+      'for the public good',
+      'sharing of ideas',
+      'copyright of the original video belongs to the original copyright holder',
+      'the korean subtitles of the video were added',
     ]
     return badPhrases.some((phrase) => normalized.includes(phrase))
   },
@@ -205,9 +446,10 @@ export const summaryService = {
       await this.fetchSummarizeTechSummary(videoId)
     if (!external) return null
 
-    const formatted = formatSummaryText(external, 5)
+    const formatted = this.ensureDescriptionSummaryQuality(external, title, description)
     const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 5) || formatted
     if (!ensured) return null
+    if (this.isSparseSummary(ensured)) return null
     if (this.isLowQualityExternalSummary(ensured)) return null
     if (!this.isRelevantToVideo(ensured, title, description)) {
       console.warn(`[summary] external summary rejected as irrelevant: ${videoId}`)
@@ -382,9 +624,7 @@ export const summaryService = {
     }
 
     const fallbackText = summary || sourceText || '요약을 생성할 수 없습니다'
-    const formatted = formatSummaryText(fallbackText, 5)
-    const ensured = ensureKoreanSummary(formatted, `${title} ${description}`, 5) || formatted
-    const qualityEnsured = this.ensureDescriptionSummaryQuality(ensured, title, description)
+    const qualityEnsured = this.ensureDescriptionSummaryQuality(fallbackText, title, description)
 
     await videoRepository.updateSummary(
       videoId,
@@ -408,8 +648,12 @@ export const summaryService = {
   ): Promise<{ text: string; sourceType: 'transcript' } | null> {
     try {
       const cleanedTranscript = cleanTranscript(transcript)
+      const translatedTranscript = this.isLikelyEnglishTranscript(cleanedTranscript)
+        ? await this.translateEnglishTranscriptToKorean(cleanedTranscript)
+        : null
+      const transcriptForSummary = translatedTranscript || cleanedTranscript
 
-      if (!cleanedTranscript) {
+      if (!transcriptForSummary) {
         const message = '자막 본문을 정리하지 못했습니다'
         await videoRepository.updateSummary(videoId, message, 'transcript', 'failed')
         return { text: message, sourceType: 'transcript' }
@@ -424,10 +668,10 @@ export const summaryService = {
           console.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
           const shouldChunk =
             this.isChunkedSummarizationEnabled() &&
-            cleanedTranscript.length >= this.chunkSummarizationThreshold()
+            transcriptForSummary.length >= this.chunkSummarizationThreshold()
 
           if (shouldChunk) {
-            const chunks = chunkTranscript(cleanedTranscript, this.chunkSize()).slice(0, this.chunkLimit())
+            const chunks = chunkTranscript(transcriptForSummary, this.chunkSize()).slice(0, this.chunkLimit())
             const chunkSummaries: string[] = []
 
             for (const chunk of chunks) {
@@ -445,7 +689,7 @@ export const summaryService = {
               summary = formatSummaryText(mergedChunkSummary, 5)
             }
           } else {
-            summary = await summarizer.summarize(cleanedTranscript, 200)
+            summary = await summarizer.summarize(transcriptForSummary, 200)
           }
         } else {
           console.warn('[summary] summarizer not available')
@@ -454,10 +698,10 @@ export const summaryService = {
 
       if (!summary && summarizer && !(summarizer instanceof HeuristicTranscriptSummarizer)) {
         console.warn('[summary] primary summarizer failed, falling back to heuristic transcript summary')
-        summary = await new HeuristicTranscriptSummarizer().summarize(cleanedTranscript, 200)
+        summary = await new HeuristicTranscriptSummarizer().summarize(transcriptForSummary, 200)
       }
 
-      const heuristicSummary = formatSummaryText(buildHeuristicSummary(cleanedTranscript, 5), 5)
+      const heuristicSummary = formatSummaryText(buildHeuristicSummary(transcriptForSummary, 5), 5)
       const formattedSummaryRaw = summary
         ? formatSummaryText(summary, 5)
         : heuristicSummary
@@ -467,14 +711,38 @@ export const summaryService = {
           : formatSummaryText(`${formattedSummaryRaw}\n${heuristicSummary}`, 5)
       const formattedSummary = ensureKoreanSummary(
         robustSummaryRaw,
-        `${contextVideo?.title || ''} ${contextVideo?.description || ''} ${cleanedTranscript.slice(0, 500)}`,
+        `${contextVideo?.title || ''} ${contextVideo?.description || ''} ${transcriptForSummary.slice(0, 500)}`,
         5
       )
+      const stabilizedSummary = formattedSummary
+        ? this.ensureTranscriptSummaryQuality(
+            formattedSummary,
+            heuristicSummary,
+            contextVideo?.title || '',
+            contextVideo?.description || ''
+          )
+        : ''
+      const reinforcedSummary = (() => {
+        if (!stabilizedSummary || !this.isSparseSummary(stabilizedSummary)) return stabilizedSummary
+        const reinforcedHeuristic = formatSummaryText(buildHeuristicSummary(transcriptForSummary, 6), 5)
+        const merged = formatSummaryText(`${stabilizedSummary}\n${reinforcedHeuristic}`, 5)
+        const ensuredMerged = ensureKoreanSummary(
+          merged,
+          `${contextVideo?.title || ''} ${contextVideo?.description || ''} ${transcriptForSummary.slice(0, 2500)}`,
+          5
+        )
+        return this.ensureTranscriptSummaryQuality(
+          ensuredMerged,
+          reinforcedHeuristic,
+          contextVideo?.title || '',
+          contextVideo?.description || ''
+        )
+      })()
 
-      if (formattedSummary) {
-        await videoRepository.updateTranscript(videoId, cleanedTranscript, 'extracted')
-        await videoRepository.updateSummary(videoId, formattedSummary, 'transcript', 'complete')
-        return { text: formattedSummary, sourceType: 'transcript' }
+      if (reinforcedSummary) {
+        await videoRepository.updateTranscript(videoId, transcriptForSummary, 'extracted')
+        await videoRepository.updateSummary(videoId, reinforcedSummary, 'transcript', 'complete')
+        return { text: reinforcedSummary, sourceType: 'transcript' }
       } else {
         const fallbackFromDescriptionRaw = heuristicSummary
         const fallbackFromDescription = ensureKoreanSummary(
@@ -482,11 +750,19 @@ export const summaryService = {
           `${contextVideo?.title || ''} ${contextVideo?.description || ''}`,
           5
         )
+        const stabilizedFallback = fallbackFromDescription
+          ? this.ensureTranscriptSummaryQuality(
+              fallbackFromDescription,
+              heuristicSummary,
+              contextVideo?.title || '',
+              contextVideo?.description || ''
+            )
+          : ''
 
-        if (fallbackFromDescription) {
-          await videoRepository.updateTranscript(videoId, cleanedTranscript, 'extracted')
-          await videoRepository.updateSummary(videoId, fallbackFromDescription, 'transcript', 'complete')
-          return { text: fallbackFromDescription, sourceType: 'transcript' }
+        if (stabilizedFallback) {
+          await videoRepository.updateTranscript(videoId, transcriptForSummary, 'extracted')
+          await videoRepository.updateSummary(videoId, stabilizedFallback, 'transcript', 'complete')
+          return { text: stabilizedFallback, sourceType: 'transcript' }
         }
 
         const message = '요약을 생성할 수 없습니다'

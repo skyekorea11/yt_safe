@@ -85,6 +85,9 @@ export async function addChannelAction(identifier: string): Promise<{
         duration_seconds: videoDetail?.contentDetails?.duration
           ? parseDurationToSeconds(videoDetail.contentDetails.duration)
           : undefined,
+        like_count: videoDetail?.statistics?.likeCount
+          ? Number(videoDetail.statistics.likeCount)
+          : undefined,
         video_url: `https://www.youtube.com/watch?v=${videoId}`,
       })
 
@@ -166,6 +169,9 @@ export async function refreshChannelVideosAction(youtubeChannelId: string): Prom
         duration_text: videoDetail?.contentDetails?.duration ? youtubeService.formatDuration(videoDetail.contentDetails.duration) : undefined,
         duration_seconds: videoDetail?.contentDetails?.duration
           ? parseDurationToSeconds(videoDetail.contentDetails.duration)
+          : undefined,
+        like_count: videoDetail?.statistics?.likeCount
+          ? Number(videoDetail.statistics.likeCount)
           : undefined,
         video_url: `https://www.youtube.com/watch?v=${videoId}`,
       })

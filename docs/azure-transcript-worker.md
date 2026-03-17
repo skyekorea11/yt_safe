@@ -78,3 +78,45 @@ az containerapp job execution show -g $RG -n $JOB --job-execution-name <executio
 npm run transcripts:sync -- --limit=5
 npm run transcripts:sync -- --video=<youtubeVideoId>
 ```
+
+## 앱 런타임(Azure) 연동
+
+Vercel/심사 배포 런타임에서 `yt-dlp` 실행이 막히는 경우를 위해,
+앱은 `TRANSCRIPT_SERVICE_URL`이 설정되면 Azure HTTP 서비스를 우선 호출합니다.
+
+### 필요한 환경변수 (App)
+
+- `TRANSCRIPT_SERVICE_URL=https://<your-azure-service-domain>`
+- `TRANSCRIPT_SERVICE_TOKEN=<optional-token>`
+- `TRANSCRIPT_SERVICE_TIMEOUT_MS=25000` (선택)
+- `AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY=120` (권장)
+- `AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH=1500` (권장)
+- `AZURE_TRANSCRIPT_CAP_STRICT=true` (권장)
+
+`AZURE_TRANSCRIPT_CAP_STRICT=true`면 사용량 카운트 확인이 실패할 때 Azure 호출을 차단합니다.
+(예산 보호 우선)
+
+### Azure 서비스 응답 형식
+
+아래 중 하나를 반환하면 앱에서 자동 인식합니다.
+
+```json
+{ "status": "READY", "text": "..." }
+```
+
+```json
+{ "status": "NOT_AVAILABLE" }
+```
+
+```json
+{ "success": true, "transcript": "...", "status": "extracted" }
+```
+
+지원 엔드포인트 패턴(자동 시도):
+
+- `POST /api/transcripts/:videoId`
+- `POST /transcripts/:videoId`
+- `POST /api/transcripts` with `{ "videoId": "..." }`
+- `POST /transcripts` with `{ "videoId": "..." }`
+- `GET /api/transcripts/:videoId`
+- `GET /transcripts/:videoId`
