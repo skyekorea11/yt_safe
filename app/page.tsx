@@ -84,7 +84,7 @@ export default function DashboardPage() {
   const [newsPanelLoading, setNewsPanelLoading] = useState(false)
   const [newsPanelError, setNewsPanelError] = useState('')
   const [newsPanelCollapsed, setNewsPanelCollapsed] = useState(false)
-  const [supadataQuota, setSupadataQuota] = useState<{ remaining: number; total: number; resetCycleDays: number } | null>(null)
+  const [supadataQuota, setSupadataQuota] = useState<{ remaining: number; total: number } | null>(null)
   const [relatedVideoRefreshTokenById, setRelatedVideoRefreshTokenById] = useState<Record<string, number>>({})
   const [externalChannelVideosById, setExternalChannelVideosById] = useState<Record<string, ChannelVideoItem[]>>({})
   const [externalChannelVideoLoadingById, setExternalChannelVideoLoadingById] = useState<Record<string, boolean>>({})
@@ -945,14 +945,9 @@ export default function DashboardPage() {
         <div className="xl:sticky xl:top-24 flex flex-col gap-2" style={{ maxHeight: panelMaxHeight }}>
           {/* Supadata 쿼터 배지 */}
           {supadataQuota && (
-            <div className="border border-slate-100 rounded-xl bg-white shadow-[0_1px_4px_rgba(16,24,40,0.06)] px-3 py-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-500">자막 API 잔여</p>
-                <p className="text-sm font-semibold text-gray-800">{supadataQuota.remaining} <span className="font-normal text-gray-400">/ {supadataQuota.total}</span></p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs text-indigo-400">{supadataQuota.resetCycleDays}일 주기 충전</p>
-              </div>
+            <div className="border border-slate-100 rounded-xl bg-white shadow-[0_1px_4px_rgba(16,24,40,0.06)] px-3 py-2 flex items-center gap-2">
+              <p className="text-xs font-medium text-gray-500">자막 API 잔여</p>
+              <p className="text-sm font-semibold text-gray-800 ml-auto">{supadataQuota.remaining} <span className="font-normal text-gray-400">/ {supadataQuota.total}</span></p>
             </div>
           )}
 

@@ -22,6 +22,5 @@ export async function GET() {
     total: data.maxCredits,
     used: data.usedCredits,
     remaining: data.maxCredits - data.usedCredits,
-    resetCycleDays: 14,
   })
 }
