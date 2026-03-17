@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, LayoutDashboard, Heart, Settings, GripVertical, FilterX, ChevronDown } from 'lucide-react'
+import { Menu, LayoutDashboard, Heart, Settings, GripVertical, FilterX, ChevronDown, ChevronLeft } from 'lucide-react'
 import TopNav from './TopNav'
 import ChannelAddForm from './ChannelAddForm'
 import { Channel } from '@/types'
@@ -588,28 +588,34 @@ export default function AppShell({
       />
 
       <div className="flex flex-1 overflow-hidden min-w-0">
-        <aside
-          className={`hidden w-72 shrink-0 bg-white border-r border-slate-100 flex-col overflow-hidden ${
-            desktopSidebarOpen ? 'lg:flex' : 'lg:hidden'
-          }`}
-        >
-          <SidebarContent
-            isSettingsPage={isSettingsPage}
-            pathname={pathname}
-            channels={orderedChannels}
-            newVideoCount={newVideoCount}
-            selectedChannelIds={selectedChannelIds}
-            onChannelAdded={onChannelAdded}
-            onChannelRemoved={onChannelRemoved}
-            onChannelSelected={onChannelSelected}
-            onChannelGroupChanged={onChannelGroupChanged}
-            onChannelClearFilter={onChannelClearFilter}
-            onChannelReorder={handleChannelReorder}
-            groupingEnabled={groupingEnabled}
-            onGroupingToggle={toggleGrouping}
-            onClose={() => updateDesktopSidebarOpen(false)}
-          />
-        </aside>
+        <div className={`relative hidden shrink-0 ${desktopSidebarOpen ? 'lg:block' : 'lg:hidden'}`}>
+          <aside className="w-72 h-full bg-white border-r border-slate-100 flex flex-col overflow-hidden">
+            <SidebarContent
+              isSettingsPage={isSettingsPage}
+              pathname={pathname}
+              channels={orderedChannels}
+              newVideoCount={newVideoCount}
+              selectedChannelIds={selectedChannelIds}
+              onChannelAdded={onChannelAdded}
+              onChannelRemoved={onChannelRemoved}
+              onChannelSelected={onChannelSelected}
+              onChannelGroupChanged={onChannelGroupChanged}
+              onChannelClearFilter={onChannelClearFilter}
+              onChannelReorder={handleChannelReorder}
+              groupingEnabled={groupingEnabled}
+              onGroupingToggle={toggleGrouping}
+            />
+          </aside>
+          {/* Sticky-tab toggle: protrudes from sidebar's right edge */}
+          <button
+            type="button"
+            onClick={() => updateDesktopSidebarOpen(false)}
+            className="absolute top-20 right-0 translate-x-full z-10 flex items-center justify-center bg-white border border-l-0 border-slate-200 rounded-r-lg px-1 py-3 shadow-sm hover:bg-slate-50 transition-colors"
+            aria-label="사이드바 닫기"
+          >
+            <ChevronLeft size={13} className="text-slate-400" />
+          </button>
+        </div>
         {!desktopSidebarOpen && (
           <CollapsedSidebarRail pathname={pathname} onOpen={() => updateDesktopSidebarOpen(true)} />
         )}
