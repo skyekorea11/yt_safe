@@ -185,9 +185,24 @@ export default function VideoCard({
           {showSummary && (
             <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
               {video.summary_text ? (
-                <p className="text-sm text-gray-700 line-clamp-3 leading-relaxed">
-                  {video.summary_text}
-                </p>
+                (() => {
+                  const bullets = video.summary_text
+                    .split('\n')
+                    .map(l => l.trim())
+                    .filter(l => l.startsWith('•') || l.startsWith('-') || l.startsWith('*'))
+                  return bullets.length >= 2 ? (
+                    <ul className="space-y-1.5">
+                      {bullets.map((b, i) => (
+                        <li key={i} className="flex gap-2 text-sm text-gray-700 leading-snug">
+                          <span className="text-gray-400 mt-0.5 shrink-0">•</span>
+                          <span>{b.replace(/^[•\-*]\s*/, '')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-700 leading-relaxed">{video.summary_text}</p>
+                  )
+                })()
               ) : video.transcript_status === 'pending' ? (
                 <p className="text-sm text-gray-500">자막을 가져오는 중...</p>
               ) : video.transcript_status === 'failed' ? (

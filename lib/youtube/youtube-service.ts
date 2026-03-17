@@ -33,7 +33,7 @@ export const youtubeService = {
 
     if (hasBlockedKeyword) return false
     if (!hasCaption) return false
-    if (duration <= 60) return false
+    if (duration <= 120) return false
     return true
   },
 
@@ -195,7 +195,7 @@ export const youtubeService = {
         if (hasBlockedKeyword) return false
 
         const durationSeconds = this.parseDurationToSeconds(videoDetail.contentDetails.duration)
-        if (durationSeconds <= 60) return false
+        if (durationSeconds <= 120) return false
         const hasCaption = videoDetail.status?.caption === 'true'
         return hasCaption
       })
