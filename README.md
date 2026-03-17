@@ -1,5 +1,7 @@
 # YT Digest
 
+**라이브 데모: https://vibetest-yt-drcq.vercel.app/**
+
 유튜브 채널을 구독하고, 최신 영상의 AI 요약을 카드 형태로 한눈에 확인하는 대시보드입니다.
 
 ## 주요 기능
