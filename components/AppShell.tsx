@@ -590,7 +590,7 @@ export default function AppShell({
 
       <div className="flex flex-1 overflow-hidden min-w-0">
         <div className={`relative hidden shrink-0 ${desktopSidebarOpen ? 'lg:block' : 'lg:hidden'}`}>
-          <aside className="w-72 h-full bg-white border-r border-slate-100 flex flex-col overflow-hidden">
+          <aside className="w-60 h-full bg-white border-r border-slate-100 flex flex-col overflow-hidden">
             <SidebarContent
               isSettingsPage={isSettingsPage}
               pathname={pathname}
