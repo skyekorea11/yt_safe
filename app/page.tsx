@@ -673,11 +673,22 @@ export default function DashboardPage() {
         <div className="border border-slate-100 bg-slate-50/50 rounded-xl p-4">
           <h3 className="ui-title-sm text-gray-800 mb-2">영상 요약</h3>
           {isSummaryLoading ? (
-            <p className="ui-text-body text-gray-500 animate-pulse">
-              {video.transcript_status === 'pending'
-                ? `자막 추출 중... ${summaryElapsedSeconds}초`
-                : `요약 생성 중... ${summaryElapsedSeconds}초`}
-            </p>
+            <div className="space-y-1.5">
+              <p className="ui-text-body text-gray-500 animate-pulse">
+                {video.transcript_status === 'pending'
+                  ? `자막 추출 중...`
+                  : `요약 생성 중...`}
+                {' '}
+                <span className="font-medium text-gray-600">{Math.max(0, 60 - summaryElapsedSeconds)}초 남았습니다</span>
+              </p>
+              <p className="text-xs text-gray-400">
+                {summaryElapsedSeconds < 20
+                  ? '🧘 기다리는 동안 기지개를 펴 보아요!'
+                  : summaryElapsedSeconds < 40
+                  ? '☕ 커피 한 모금 하고 오세요~'
+                  : '🏁 거의 다 됐어요! 조금만 더...'}
+              </p>
+            </div>
           ) : video.transcript_status === 'not_available' ? (
             <p className="ui-text-body text-gray-500">아직 자막을 추출할 수 없습니다.</p>
           ) : video.transcript_status === 'pending' ? (
