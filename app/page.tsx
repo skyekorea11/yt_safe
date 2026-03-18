@@ -698,9 +698,24 @@ export default function DashboardPage() {
           ) : video.summary_status === 'failed' && video.summary_text ? (
             <p className="ui-text-body text-gray-600">{video.summary_text}</p>
           ) : video.summary_status === 'complete' && video.summary_text ? (
-            <p className="ui-text-body text-gray-700 whitespace-pre-line leading-relaxed">
-              {video.summary_text}
-            </p>
+            (() => {
+              const lines = video.summary_text.split('\n').map(l => l.trim()).filter(Boolean)
+              const isBullet = lines.length >= 2 && lines.every(l => /^[✦•\-*]/.test(l))
+              return isBullet ? (
+                <ul className="space-y-2">
+                  {lines.map((l, i) => (
+                    <li key={i} className="flex gap-2 ui-text-body text-gray-700 leading-snug">
+                      <span className="shrink-0 mt-0.5 text-gray-400">✦</span>
+                      <span>{l.replace(/^[✦•\-*]\s*/, '')}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ui-text-body text-gray-700 whitespace-pre-line leading-relaxed">
+                  {video.summary_text}
+                </p>
+              )
+            })()
           ) : (
             <p className="ui-text-body text-gray-500">아직 요약이 없습니다</p>
           )}
