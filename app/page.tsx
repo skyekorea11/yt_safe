@@ -55,7 +55,7 @@ type SidebarChannelGroup = 'news' | 'finance' | 'real_estate' | 'tech' | 'lifest
 type VideoSortMode = 'latest' | 'interest'
 
 export default function DashboardPage() {
-  const panelMaxHeight = 'calc(100vh - 64px)'
+  const panelMaxHeight = 'calc(100vh - 64px - 40px)'
 
   const [channels, setChannels] = useState<Channel[]>([])
   const [videos, setVideos] = useState<Video[]>([])

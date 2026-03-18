@@ -316,6 +316,9 @@ export default function FavoritesPage() {
       }
       map.get(channelId)!.videos.push(video)
     }
+    for (const entry of map.values()) {
+      entry.videos.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
+    }
     return map
   }, [favoriteVideos, channelTitleById])
 
