@@ -124,7 +124,7 @@ export function useVideoNote(videoId: string) {
  */
 export function useSummaryPreferences() {
   const [showSummary, setShowSummary] = useState(true)
-  const [enableTranscriptPipeline, setEnableTranscriptPipeline] = useState(false)
+  const [enableTranscriptPipeline, setEnableTranscriptPipeline] = useState(true)
 
   // Load from localStorage on mount
   useEffect(() => {
