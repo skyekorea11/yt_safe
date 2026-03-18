@@ -576,11 +576,11 @@ export const summaryService = {
               await videoRepository.updateTranscript(videoId, '', status)
             }
           } catch (err) {
-            console.error('[summary] transcript extraction error:', err)
+            console.log('[summary] transcript extraction error:', err)
             await videoRepository.updateTranscript(videoId, '', 'failed')
           }
         } else {
-          console.warn('[summary] no transcript provider available')
+          console.log('[summary] no transcript provider available')
           await videoRepository.updateTranscript(videoId, '', 'failed')
         }
       }

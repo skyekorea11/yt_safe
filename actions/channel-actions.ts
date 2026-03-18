@@ -229,7 +229,7 @@ export async function refreshVideoSummaryAction(
 
     return { success: true, summary, video: updatedVideo }
   } catch (error) {
-    console.error('Error refreshing summary:', error)
+    console.log('Error refreshing summary:', error)
     const updatedVideo = await videoRepository.getByYouTubeId(videoId)
     return { success: false, video: updatedVideo, error: 'Failed to refresh summary.' }
   }
