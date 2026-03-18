@@ -627,7 +627,7 @@ export default function DashboardPage() {
           <>
       <div className="flex items-start justify-between gap-3 pb-1 border-b border-slate-100">
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem]">
+          <h2 className="text-lg font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem] break-keep">
             {video.title}
           </h2>
           <div className="mt-1 flex items-center gap-1.5 text-xs min-h-[1rem]">
