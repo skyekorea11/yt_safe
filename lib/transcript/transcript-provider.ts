@@ -28,7 +28,7 @@ const COOKIES_BROWSER = process.env.YT_DLP_COOKIES_BROWSER || 'edge';
 const IMPERSONATE_TARGET = process.env.YT_DLP_IMPERSONATE || 'edge';
 const TRANSCRIPT_SERVICE_URL = process.env.TRANSCRIPT_SERVICE_URL?.trim() || '';
 const TRANSCRIPT_SERVICE_TOKEN = process.env.TRANSCRIPT_SERVICE_TOKEN?.trim() || '';
-const TRANSCRIPT_SERVICE_TIMEOUT_MS = Number(process.env.TRANSCRIPT_SERVICE_TIMEOUT_MS || '25000');
+const TRANSCRIPT_SERVICE_TIMEOUT_MS = Number(process.env.TRANSCRIPT_SERVICE_TIMEOUT_MS || '15000');
 const AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY || '120');
 const AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH || '1500');
 const AZURE_TRANSCRIPT_CAP_STRICT = (process.env.AZURE_TRANSCRIPT_CAP_STRICT || 'true').toLowerCase() !== 'false';
@@ -277,7 +277,7 @@ export class SupadataTranscriptProvider implements TranscriptProvider {
       const url = `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&lang=${lang}&text=true`;
       const res = await fetch(url, {
         headers: { 'x-api-key': SUPADATA_API_KEY },
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) return null;
       const data = await res.json().catch(() => null);
