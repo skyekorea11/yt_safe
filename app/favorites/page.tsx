@@ -594,24 +594,19 @@ export default function FavoritesPage() {
 
   return (
     <AppShell {...shellProps}>
+      <div className="-m-5 lg:-ml-8 overflow-y-auto" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="px-5 lg:pl-8">
 
-      {/* Header */}
-      <div className="mb-4 flex items-center gap-2 xl:text-slate-900">
-        <Heart size={18} className="text-red-400 fill-red-400" />
-        <h1 className="text-lg font-semibold text-gray-900">나의 Pick</h1>
-        <span className="text-sm text-gray-500">({favoriteVideos.length}개 영상)</span>
-      </div>
+      {/* Sticky header + tab bar */}
+      <div className="sticky top-0 z-10 app-shell-bg pt-4 pb-2 border-b border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <div className="mb-3 flex items-center gap-2 xl:text-slate-900">
+          <Heart size={18} className="text-red-400 fill-red-400" />
+          <h1 className="text-lg font-semibold text-gray-900">나의 Pick</h1>
+          <span className="text-sm text-gray-500">({favoriteVideos.length}개 영상)</span>
+        </div>
 
-      {favoriteVideos.length === 0 ? (
-        <EmptyState
-          title="즐겨찾기한 영상이 없습니다"
-          description="대시보드에서 영상 옆 ♡ 버튼을 눌러 즐겨찾기에 추가하세요."
-        />
-      ) : (
-        <div className="space-y-6">
-
-          {/* Compact tab bar */}
-          <div className="sticky top-0 z-20 space-y-2 bg-white py-2 border-b border-slate-200">
+        {favoriteVideos.length > 0 && (
+          <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div
                 ref={channelTabWrapRef}
@@ -698,9 +693,17 @@ export default function FavoritesPage() {
               </div>
             </div>
           </div>
+        )}
+      </div>
 
-          {/* Content */}
-          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,760px)_320px] gap-5 items-start">
+      {/* Content */}
+      {favoriteVideos.length === 0 ? (
+        <EmptyState
+          title="즐겨찾기한 영상이 없습니다"
+          description="대시보드에서 영상 옆 ♡ 버튼을 눌러 즐겨찾기에 추가하세요."
+        />
+      ) : (
+        <div className="mt-6 grid grid-cols-1 xl:grid-cols-[minmax(0,760px)_320px] gap-5 items-start">
             <div className="space-y-8 xl:max-w-[760px]">
               {groupsToShow.map(channelId => {
                 const entry = channelVideoMap.get(channelId)!
@@ -882,8 +885,6 @@ export default function FavoritesPage() {
               </div>
             </aside>
           </div>
-
-        </div>
       )}
       <datalist id="favorite-channel-options">
         {sortedChannelIds.map((channelId) => {
@@ -895,6 +896,8 @@ export default function FavoritesPage() {
           )
         })}
       </datalist>
+      </div>
+      </div>
     </AppShell>
   )
 }

@@ -621,7 +621,7 @@ export default function AppShell({
           <CollapsedSidebarRail pathname={pathname} onOpen={() => updateDesktopSidebarOpen(true)} />
         )}
 
-        <main className="flex-1 overflow-hidden p-5 pb-20 lg:pb-5 lg:pl-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-5 pb-20 lg:pb-5 lg:pl-8">{children}</main>
       </div>
 
       {mobileSidebarOpen && (
