@@ -630,19 +630,24 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem]">
             {video.title}
           </h2>
-          <div className="mt-1 flex items-center gap-1.5 text-xs min-h-[1rem]">
-            {isNewVideo(video) && (
-              <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded font-semibold text-[10px]">NEW</span>
+          <div className="mt-1 flex items-center justify-between gap-1.5 text-xs min-h-[1rem]">
+            <div className="flex items-center gap-1.5">
+              {isNewVideo(video) && (
+                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded font-semibold text-[10px]">NEW</span>
+              )}
+              <span className="text-gray-500">
+                {new Date(video.published_at).toLocaleString('ko-KR', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </div>
+            {video.duration_text && (
+              <span className="text-gray-400 font-medium">{video.duration_text}</span>
             )}
-            <span className="text-gray-500">
-              {new Date(video.published_at).toLocaleString('ko-KR', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
           </div>
         </div>
         <button
