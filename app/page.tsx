@@ -630,40 +630,51 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[3.5rem]">
             {video.title}
           </h2>
-          <div className="mt-1 flex items-center justify-between gap-1.5 text-xs min-h-[1rem]">
-            <div className="flex items-center gap-1.5">
-              {isNewVideo(video) && (
-                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded font-semibold text-[10px]">NEW</span>
-              )}
-              <span className="text-gray-500">
-                {new Date(video.published_at).toLocaleString('ko-KR', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            </div>
-            {video.duration_text && (
-              <span className="text-gray-400 font-medium">{video.duration_text}</span>
+          <div className="mt-1 flex items-center gap-1.5 text-xs min-h-[1rem]">
+            {isNewVideo(video) && (
+              <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded font-semibold text-[10px]">NEW</span>
             )}
+            <span className="text-gray-500">
+              {new Date(video.published_at).toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
           </div>
         </div>
-        <button
-          onClick={() => toggleFavorite(video.youtube_video_id)}
-          disabled={togglingIds.has(video.youtube_video_id)}
-          className="ui-btn ui-btn-icon flex-shrink-0 disabled:opacity-50"
-          title={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-          aria-label={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-        >
-          <Heart
-            size={14}
-            className={favoriteIds.has(video.youtube_video_id)
-              ? 'text-red-400 fill-red-400'
-              : 'text-gray-300'}
-          />
-        </button>
+        <div className="flex flex-col items-center justify-between self-stretch flex-shrink-0">
+          <button
+            onClick={() => toggleFavorite(video.youtube_video_id)}
+            disabled={togglingIds.has(video.youtube_video_id)}
+            className="ui-btn ui-btn-icon disabled:opacity-50"
+            title={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+            aria-label={favoriteIds.has(video.youtube_video_id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+          >
+            <Heart
+              size={14}
+              className={favoriteIds.has(video.youtube_video_id)
+                ? 'text-red-400 fill-red-400'
+                : 'text-gray-300'}
+            />
+          </button>
+          {video.duration_seconds != null && (
+            <span className="text-[11px] text-gray-400 font-medium">
+              {(() => {
+                const s = video.duration_seconds!
+                const h = Math.floor(s / 3600)
+                const m = Math.floor((s % 3600) / 60)
+                const sec = s % 60
+                if (h > 0) return `${h}시간 ${m}분 ${sec}초`
+                if (m > 0 && sec > 0) return `${m}분 ${sec}초`
+                if (m > 0) return `${m}분`
+                return `${sec}초`
+              })()}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2.5">
