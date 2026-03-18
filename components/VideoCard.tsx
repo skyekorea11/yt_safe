@@ -190,15 +190,15 @@ export default function VideoCard({
                     .split('\n')
                     .map(l => l.trim())
                     .filter(Boolean)
-                  const bullets = lines.filter(l => /^[•\-*▸]/.test(l))
+                  const bullets = lines.filter(l => /^[•\-*▸✦]/.test(l))
                   // Also treat as bullets if every non-empty line starts with a bullet char
-                  const isBulletList = bullets.length >= 2 || (lines.length >= 2 && lines.every(l => /^[•\-*▸]/.test(l)))
+                  const isBulletList = bullets.length >= 2 || (lines.length >= 2 && lines.every(l => /^[•\-*▸✦]/.test(l)))
                   return isBulletList ? (
                     <ul className="space-y-1.5">
                       {bullets.map((b, i) => (
                         <li key={i} className="flex gap-2 text-sm text-gray-700 leading-snug">
-                          <span className="text-gray-400 mt-0.5 shrink-0">▸</span>
-                          <span>{b.replace(/^[•\-*▸]\s*/, '')}</span>
+                          <span className="text-gray-400 mt-0.5 shrink-0">✦</span>
+                          <span>{b.replace(/^[•\-*▸✦]\s*/, '')}</span>
                         </li>
                       ))}
                     </ul>

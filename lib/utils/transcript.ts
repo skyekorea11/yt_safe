@@ -154,7 +154,7 @@ function postprocessSummarySentence(sentence: string): string {
 
 function stripLeadingBullet(sentence: string): string {
   return sentence
-    .replace(/^\s*(?:[-*•]+|[✔✓☑][️︎]?)\s*/g, '')
+    .replace(/^\s*(?:[-*•✦]+|[✔✓☑][️︎]?)\s*/g, '')
     .trim()
 }
 

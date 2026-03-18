@@ -706,7 +706,7 @@ export const summaryService = {
       const isBulletFormat = (text: string | null): text is string => {
         if (!text) return false
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-        return lines.filter(l => /^[•\-*]/.test(l)).length >= 2
+        return lines.filter(l => /^[•\-*✦]/.test(l)).length >= 2
       }
 
       if (isBulletFormat(summary)) {
