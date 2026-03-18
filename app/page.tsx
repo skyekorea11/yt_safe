@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [videoSortMode, setVideoSortMode] = useState<VideoSortMode>('latest')
   const [visibleCount, setVisibleCount] = useState(20)
   const [isSummaryLoading, setIsSummaryLoading] = useState(false)
+  const [summaryElapsedSeconds, setSummaryElapsedSeconds] = useState(0)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [noteTextByVideoId, setNoteTextByVideoId] = useState<Record<string, string>>({})
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
@@ -103,6 +104,16 @@ export default function DashboardPage() {
   )
   useEffect(() => { loadData() }, [])
   useEffect(() => { void loadSupadataQuota() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isSummaryLoading) {
+      setSummaryElapsedSeconds(0)
+      return
+    }
+    setSummaryElapsedSeconds(0)
+    const interval = setInterval(() => setSummaryElapsedSeconds(s => s + 1), 1000)
+    return () => clearInterval(interval)
+  }, [isSummaryLoading])
 
   // 60초마다 refresh 상태 폴링
   useEffect(() => {
@@ -665,6 +676,8 @@ export default function DashboardPage() {
             <p className="ui-text-body text-gray-500">아직 자막을 추출할 수 없습니다.</p>
           ) : video.transcript_status === 'pending' ? (
             <p className="ui-text-body text-gray-500 animate-pulse">자막 추출 중...</p>
+          ) : video.transcript_status === 'failed' ? (
+            <p className="ui-text-body text-gray-500">자막을 가져오지 못했습니다. 다시 시도해 주세요.</p>
           ) : video.summary_status === 'failed' && video.summary_text ? (
             <p className="ui-text-body text-gray-600">{video.summary_text}</p>
           ) : video.summary_status === 'complete' && video.summary_text ? (
@@ -672,7 +685,11 @@ export default function DashboardPage() {
               {video.summary_text}
             </p>
           ) : isSummaryLoading ? (
-            <p className="ui-text-body text-gray-500 animate-pulse">요약 생성 중...</p>
+            <p className="ui-text-body text-gray-500 animate-pulse">
+              {video.transcript_status === 'pending'
+                ? `자막 추출 중... ${summaryElapsedSeconds}초`
+                : `요약 생성 중... ${summaryElapsedSeconds}초`}
+            </p>
           ) : (
             <p className="ui-text-body text-gray-500">아직 요약이 없습니다</p>
           )}
@@ -686,11 +703,11 @@ export default function DashboardPage() {
           >
             {isSummaryLoading
               ? video.transcript_status === 'pending'
-                ? '자막 추출 중...'
-                : '요약 생성 중...'
+                ? `자막 추출 중... ${summaryElapsedSeconds}초`
+                : `요약 생성 중... ${summaryElapsedSeconds}초`
               : video.summary_status === 'complete' && !!video.summary_text
               ? '요약 다시 생성'
-              : video.summary_status === 'failed' || video.transcript_status === 'not_available'
+              : video.summary_status === 'failed' || video.transcript_status === 'not_available' || video.transcript_status === 'failed'
               ? '요약 다시 시도'
               : '요약 생성'}
           </button>
