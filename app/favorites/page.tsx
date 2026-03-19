@@ -598,10 +598,10 @@ export default function FavoritesPage() {
       <div className="px-5 lg:pl-8">
 
       {/* Sticky header + tab bar */}
-      <div className="sticky top-0 z-10 app-shell-bg pt-4 pb-2 border-b border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <div className="sticky top-0 z-10 app-shell-bg pt-4 pb-2 border-b border-slate-100">
         <div className="mb-3 flex items-center gap-2 xl:text-slate-900">
           <Heart size={18} className="text-red-400 fill-red-400" />
-          <h1 className="text-lg font-semibold text-gray-900">나의 Pick</h1>
+          <h1 className="text-lg font-semibold">나의 Pick</h1>
           <span className="text-sm text-gray-500">({favoriteVideos.length}개 영상)</span>
         </div>
 
@@ -617,9 +617,7 @@ export default function FavoritesPage() {
                 <button
                   onClick={() => setSelectedChannelTab('all')}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    selectedChannelTab === 'all'
-                      ? 'bg-slate-800 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    selectedChannelTab === 'all' ? 'tone-tab-active' : 'tone-tab-inactive'
                   }`}
                 >
                   전체 {favoriteVideos.length}
@@ -631,9 +629,7 @@ export default function FavoritesPage() {
                       key={channelId}
                       onClick={() => setSelectedChannelTab(channelId)}
                       className={`flex-shrink-0 max-w-[220px] px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                        selectedChannelTab === channelId
-                          ? 'bg-slate-800 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        selectedChannelTab === channelId ? 'tone-tab-active' : 'tone-tab-inactive'
                       }`}
                       title={entry.channelTitle}
                     >

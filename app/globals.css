@@ -502,3 +502,44 @@ html.dark.beige .tone-notify-done-btn {
   color: #dcfce7;
 }
 html.dark.beige .tone-notify-done-btn:hover { background-color: #14532d; }
+
+/* 즐겨찾기 채널 탭 */
+.tone-tab-active {
+  background-color: #312e81;
+  color: #ffffff;
+}
+.tone-tab-inactive {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+.tone-tab-inactive:hover { background-color: #e2e8f0; }
+
+html.beige:not(.dark) .tone-tab-active {
+  background-color: #92400e;
+  color: #ffffff;
+}
+html.beige:not(.dark) .tone-tab-inactive {
+  background-color: #fef3c7;
+  color: #78350f;
+}
+html.beige:not(.dark) .tone-tab-inactive:hover { background-color: #fde68a; }
+
+html.dark .tone-tab-active {
+  background-color: #4f46e5;
+  color: #eef2ff;
+}
+html.dark .tone-tab-inactive {
+  background-color: #1e1b4b;
+  color: #a5b4fc;
+}
+html.dark .tone-tab-inactive:hover { background-color: #312e81; }
+
+html.dark.beige .tone-tab-active {
+  background-color: #3e7a52;
+  color: #d4f0e0;
+}
+html.dark.beige .tone-tab-inactive {
+  background-color: #182a1e;
+  color: #68a87e;
+}
+html.dark.beige .tone-tab-inactive:hover { background-color: #1f3828; }
