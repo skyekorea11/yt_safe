@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [summaryLoadingVideoId, setSummaryLoadingVideoId] = useState<string | null>(null)
   const [summaryDoneVideoId, setSummaryDoneVideoId] = useState<string | null>(null)
   const [summaryElapsedSeconds, setSummaryElapsedSeconds] = useState(0)
+  const [confirmedUnavailableIds, setConfirmedUnavailableIds] = useState<Set<string>>(new Set())
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [noteTextByVideoId, setNoteTextByVideoId] = useState<Record<string, string>>({})
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
@@ -421,6 +422,10 @@ export default function DashboardPage() {
       if (result.video && (result.video.transcript_status === 'failed' || result.video.transcript_status === 'not_available') && !result.video.summary_text) {
         await new Promise(resolve => setTimeout(resolve, 3000))
         result = await refreshVideoSummaryAction(videoId, video.title, video.description, enableTranscriptPipeline)
+        // 재시도 후에도 not_available이면 진짜 자막 없는 것으로 확정
+        if (result.video && result.video.transcript_status === 'not_available' && !result.video.summary_text) {
+          setConfirmedUnavailableIds(prev => new Set(prev).add(videoId))
+        }
       }
 
       if (result.video) {
@@ -766,8 +771,10 @@ export default function DashboardPage() {
                   : '🤔 흠...누군가 일을 제대로 하지 않네요. 다시 채찍질 해보겠습니다.'}
               </p>
             </div>
-          ) : video.transcript_status === 'not_available' ? (
+          ) : video.transcript_status === 'not_available' && confirmedUnavailableIds.has(video.youtube_video_id) ? (
             <p className="ui-text-body text-gray-500">자막이 없으면 저는 일을 할수 없어요 😭</p>
+          ) : video.transcript_status === 'not_available' && video.summary_status !== null ? (
+            <p className="ui-text-body text-gray-500">자막을 가져오지 못했습니다. 다시 시도해 주세요.</p>
           ) : video.transcript_status === 'pending' && summaryLoadingVideoId === video.youtube_video_id ? (
             <p className="ui-text-body text-gray-500 animate-pulse">자막 추출 중...</p>
           ) : video.transcript_status === 'failed' && video.summary_status !== null ? (
@@ -801,7 +808,7 @@ export default function DashboardPage() {
         <div className="flex">
           <button
             onClick={() => handleRefreshSummary(video.youtube_video_id)}
-            disabled={summaryLoadingVideoId === video.youtube_video_id || (video.summary_status === 'complete' && !!video.summary_text && video.transcript_status !== 'failed' && video.transcript_status !== 'not_available')}
+            disabled={summaryLoadingVideoId === video.youtube_video_id || confirmedUnavailableIds.has(video.youtube_video_id) || (video.summary_status === 'complete' && !!video.summary_text && video.transcript_status !== 'failed' && video.transcript_status !== 'not_available')}
             className="tone-primary-btn ui-btn disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {summaryLoadingVideoId === video.youtube_video_id
