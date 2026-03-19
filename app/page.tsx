@@ -776,16 +776,14 @@ export default function DashboardPage() {
         <div className="flex">
           <button
             onClick={() => handleRefreshSummary(video.youtube_video_id)}
-            disabled={isSummaryLoading || video.transcript_status === 'not_available' || (video.summary_status === 'complete' && !!video.summary_text && video.transcript_status !== 'failed')}
+            disabled={isSummaryLoading || (video.summary_status === 'complete' && !!video.summary_text && video.transcript_status !== 'failed' && video.transcript_status !== 'not_available')}
             className="tone-primary-btn ui-btn disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isSummaryLoading
               ? video.transcript_status === 'pending'
                 ? '자막 추출 중...'
                 : '요약 생성 중...'
-              : video.transcript_status === 'not_available'
-              ? '자막 없음'
-              : video.transcript_status === 'failed'
+              : video.transcript_status === 'failed' || video.transcript_status === 'not_available'
               ? '요약 다시 시도'
               : video.summary_status === 'complete' && !!video.summary_text
               ? '요약 완료'
