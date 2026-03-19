@@ -104,7 +104,17 @@ export default function DashboardPage() {
     () => new Map(channels.map((channel) => [channel.youtube_channel_id, channel.thumbnail_url || ''])),
     [channels]
   )
-  useEffect(() => { loadData() }, [])
+  // mount 시 URL selectVideo param을 ref에 미리 저장 (loadData async 완료 전 대비)
+  const pendingSelectVideoId = useRef<string | null>(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const selectVideo = params.get('selectVideo')
+    if (selectVideo) {
+      pendingSelectVideoId.current = selectVideo
+      window.history.replaceState(null, '', '/')
+    }
+    loadData()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { void loadSupadataQuota() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -309,14 +319,12 @@ export default function DashboardPage() {
       const validVideosData = videosData.filter(isValidStoredVideo)
       setChannels(channelsData)
       setVideos(validVideosData)
-      // URL param(바로가기)이 있으면 최우선
-      const urlParams = new URLSearchParams(window.location.search)
-      const urlSelectVideo = urlParams.get('selectVideo')
+      // URL param(바로가기)이 있으면 최우선 (mount 시 ref에 저장해둔 값 사용)
+      const urlSelectVideo = pendingSelectVideoId.current
       if (urlSelectVideo) {
-        window.history.replaceState(null, '', '/')
-        const urlIdx = validVideosData.findIndex(v => v.youtube_video_id === urlSelectVideo)
-        if (urlIdx >= 20) setVisibleCount(urlIdx + 10)
+        pendingSelectVideoId.current = null
         pendingScrollToSelected.current = true
+        setVisibleCount(validVideosData.length) // 해당 영상이 어디에 있든 렌더되도록
         setSelectedVideoId(urlSelectVideo)
       } else {
         const savedId = sessionStorage.getItem('selectedVideoId')
@@ -422,6 +430,7 @@ export default function DashboardPage() {
           : v
       )
     )
+    let wasAborted = false
     try {
       let result = await refreshVideoSummaryAction(videoId, video.title, video.description, enableTranscriptPipeline)
 
@@ -429,8 +438,8 @@ export default function DashboardPage() {
       if (result.video && (result.video.transcript_status === 'failed' || result.video.transcript_status === 'not_available') && !result.video.summary_text) {
         await new Promise(resolve => setTimeout(resolve, 3000))
         result = await refreshVideoSummaryAction(videoId, video.title, video.description, enableTranscriptPipeline)
-        // 재시도 후에도 not_available이면 진짜 자막 없는 것으로 확정
-        if (result.video && result.video.transcript_status === 'not_available' && !result.video.summary_text) {
+        // 재시도 후에도 실패면 진짜 자막 없는 것으로 확정 (failed 포함)
+        if (result.video && (result.video.transcript_status === 'not_available' || result.video.transcript_status === 'failed') && !result.video.summary_text) {
           setConfirmedUnavailableIds(prev => new Set(prev).add(videoId))
         }
       }
@@ -451,13 +460,17 @@ export default function DashboardPage() {
         }
       }
     } catch (error) {
-      console.error('Error refreshing summary:', error)
+      wasAborted = error instanceof Error && (error.name === 'AbortError' || error.message.includes('abort'))
+      if (!wasAborted) console.error('Error refreshing summary:', error)
     } finally {
       setSummaryLoadingVideoId(null)
-      try {
-        localStorage.removeItem('summary-loading')
-        window.dispatchEvent(new Event('summary-loading-updated'))
-      } catch {}
+      // abort된 경우(페이지 이동 등) localStorage loading 상태를 유지해 팝업이 사라지지 않게 함
+      if (!wasAborted) {
+        try {
+          localStorage.removeItem('summary-loading')
+          window.dispatchEvent(new Event('summary-loading-updated'))
+        } catch {}
+      }
     }
   }
 
@@ -782,7 +795,7 @@ export default function DashboardPage() {
                   : '🤔 흠...누군가 일을 제대로 하지 않네요. 다시 채찍질 해보겠습니다.'}
               </p>
             </div>
-          ) : video.transcript_status === 'not_available' && confirmedUnavailableIds.has(video.youtube_video_id) ? (
+          ) : (video.transcript_status === 'not_available' || video.transcript_status === 'failed') && confirmedUnavailableIds.has(video.youtube_video_id) ? (
             <p className="ui-text-body text-gray-500">자막이 없으면 저는 일을 할수 없어요 😭</p>
           ) : video.transcript_status === 'not_available' && video.summary_status !== null ? (
             <p className="ui-text-body text-gray-500">자막을 가져오지 못했습니다. 다시 시도해 주세요.</p>
