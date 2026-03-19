@@ -732,13 +732,13 @@ export default function DashboardPage() {
               <p className="text-xs text-gray-400">
                 {summaryElapsedSeconds < 1
                   ? ''
-                  : summaryElapsedSeconds < 8
-                  ? '🤔 흠...누군가 일을 제대로 하지 않네요. 다시 채찍질 해보겠습니다.'
-                  : summaryElapsedSeconds < 25
+                  : summaryElapsedSeconds < 20
                   ? '🧘 기다리는 동안 기지개를 펴 보아요!'
-                  : summaryElapsedSeconds < 45
+                  : summaryElapsedSeconds < 40
                   ? '☕ 커피 한 모금 하고 오세요~'
-                  : '🏁 거의 다 됐어요! 조금만 더...'}
+                  : summaryElapsedSeconds < 55
+                  ? '🏁 거의 다 됐어요! 조금만 더...'
+                  : '🤔 흠...누군가 일을 제대로 하지 않네요. 다시 채찍질 해보겠습니다.'}
               </p>
             </div>
           ) : video.transcript_status === 'not_available' ? (
