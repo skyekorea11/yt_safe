@@ -1,10 +1,10 @@
 import { execFileSync } from 'child_process'
 import { transcriptUsageRepository } from '@/lib/supabase/videos'
 import {
-import { logger } from '@/lib/logger'
   DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY,
   DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH,
 } from '@/lib/config'
+import { logger } from '@/lib/logger'
 
 /**
  * Transcript provider - yt-dlp 기반 자막 추출
