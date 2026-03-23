@@ -1,5 +1,6 @@
 import { supabase } from './client'
 import { Channel, ChannelSubscriptionDemo, NewsChannel } from '@/types'
+import { logger } from '@/lib/logger'
 
 /**
  * Channel repository for CRUD operations
@@ -37,25 +38,25 @@ export const channelRepository = {
 
       if (error) {
         // log raw object first (may be non-enumerable)
-        console.error('Supabase error fetching channels raw:', error)
+        logger.error('Supabase error fetching channels raw:', error)
         // also serialize all properties to make sure nothing is hidden
         try {
-          console.error('Supabase error fetching channels serialized:',
+          logger.error('Supabase error fetching channels serialized:',
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
         } catch {}
-        console.error('Supabase error fetching channels:', {
+        logger.error('Supabase error fetching channels:', {
           message: error.message,
           code: error.code,
           details: error.details,
         })
         if (error.code === 'PGRST205') {
-          console.warn('It looks like the channels table does not exist. Did you run lib/supabase/schema.sql against your database?')
+          logger.warn('It looks like the channels table does not exist. Did you run lib/supabase/schema.sql against your database?')
         }
         throw error
       }
       return data || []
     } catch (error) {
-      console.error('Error fetching channels:', {
+      logger.error('Error fetching channels:', {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       })
@@ -92,7 +93,7 @@ export const channelRepository = {
           reason = 'missing_column'
         }
       }
-      console.error('Error updating channel sort order:', error)
+      logger.error('Error updating channel sort order:', error)
       return { success: false, reason, message }
     }
   },
@@ -111,7 +112,7 @@ export const channelRepository = {
       if (error && error.code !== 'PGRST116') throw error // PGRST116 = no rows found
       return data || null
     } catch (error) {
-      console.error('Error fetching channel:', error)
+      logger.error('Error fetching channel:', error)
       return null
     }
   },
@@ -136,7 +137,7 @@ export const channelRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error upserting channel:', error)
+      logger.error('Error upserting channel:', error)
       return null
     }
   },
@@ -157,7 +158,7 @@ export const channelRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating channel stock mode:', error)
+      logger.error('Error updating channel stock mode:', error)
       return false
     }
   },
@@ -178,7 +179,7 @@ export const channelRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating channel news mode:', error)
+      logger.error('Error updating channel news mode:', error)
       return false
     }
   },
@@ -211,13 +212,13 @@ export const channelRepository = {
           reason = 'missing_column'
         }
         try {
-          console.error(
+          logger.error(
             'Error updating channel group serialized:',
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
           )
         } catch {}
       }
-      console.error('Error updating channel group:', error)
+      logger.error('Error updating channel group:', error)
       return { success: false, reason, message }
     }
   },
@@ -235,7 +236,7 @@ export const channelRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error deleting channel:', error)
+      logger.error('Error deleting channel:', error)
       return false
     }
   },
@@ -258,7 +259,7 @@ export const channelSubscriptionRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching subscriptions:', error)
+      logger.error('Error fetching subscriptions:', error)
       return []
     }
   },
@@ -280,7 +281,7 @@ export const channelSubscriptionRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error adding subscription:', error)
+      logger.error('Error adding subscription:', error)
       return null
     }
   },
@@ -298,7 +299,7 @@ export const channelSubscriptionRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error removing subscription:', error)
+      logger.error('Error removing subscription:', error)
       return false
     }
   },
@@ -317,7 +318,7 @@ export const channelSubscriptionRepository = {
       if (error && error.code !== 'PGRST116') throw error
       return !!data
     } catch (error) {
-      console.error('Error checking subscription:', error)
+      logger.error('Error checking subscription:', error)
       return false
     }
   },
@@ -333,7 +334,7 @@ export const newsChannelRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching news channels:', error)
+      logger.error('Error fetching news channels:', error)
       return []
     }
   },
@@ -362,7 +363,7 @@ export const newsChannelRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error upserting news channel:', error)
+      logger.error('Error upserting news channel:', error)
       return null
     }
   },
@@ -376,7 +377,7 @@ export const newsChannelRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error deleting news channel:', error)
+      logger.error('Error deleting news channel:', error)
       return false
     }
   },

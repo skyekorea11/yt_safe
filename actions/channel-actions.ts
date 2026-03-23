@@ -13,6 +13,7 @@ import { getTranscriptProvider } from '@/lib/transcript/transcript-provider'
 import { markRefreshDone } from '@/lib/scheduler/refresh-state'
 import { getLocalSummarizer } from '@/lib/summarization/local-summarizer'
 import { Channel, Video } from '@/types'
+import { logger } from '@/lib/logger'
 
 /**
  * Add a YouTube channel by URL, handle, or channel ID
@@ -105,7 +106,7 @@ export async function addChannelAction(identifier: string): Promise<{
       videos: savedVideos,
     }
   } catch (error) {
-    console.error('Error adding channel:', error)
+    logger.error('Error adding channel:', error)
     return { success: false, error: 'An unexpected error occurred. Please check your API key and try again.' }
   }
 }
@@ -124,7 +125,7 @@ export async function removeChannelAction(youtubeChannelId: string): Promise<{
 
     return { success: true }
   } catch (error) {
-    console.error('Error removing channel:', error)
+    logger.error('Error removing channel:', error)
     return { success: false, error: 'Failed to remove channel.' }
   }
 }
@@ -183,7 +184,7 @@ export async function refreshChannelVideosAction(youtubeChannelId: string): Prom
 
     return { success: true, videos: savedVideos }
   } catch (error) {
-    console.error('Error refreshing channel videos:', error)
+    logger.error('Error refreshing channel videos:', error)
     return { success: false, error: 'Failed to refresh videos.' }
   }
 }
@@ -204,20 +205,20 @@ export async function refreshVideoSummaryAction(
   error?: string
 }> {
   try {
-    console.log('[action] refreshVideoSummaryAction called for', videoId)
+    logger.log('[action] refreshVideoSummaryAction called for', videoId)
     // If transcript already exists in DB, just regenerate summary without re-fetching transcript
     const existingVideo = await videoRepository.getByYouTubeId(videoId)
-    console.log('[action] existingVideo transcript:', existingVideo?.transcript_text ? 'EXISTS' : 'NONE', 'status:', existingVideo?.transcript_status)
+    logger.log('[action] existingVideo transcript:', existingVideo?.transcript_text ? 'EXISTS' : 'NONE', 'status:', existingVideo?.transcript_status)
     if (existingVideo?.transcript_text) {
-      console.log('[action] using existing transcript, calling generateTranscriptSummary')
+      logger.log('[action] using existing transcript, calling generateTranscriptSummary')
       const result = await summaryService.generateTranscriptSummary(videoId, existingVideo.transcript_text)
       const updatedVideo = await videoRepository.getByYouTubeId(videoId)
-      console.log('[action] generateTranscriptSummary result:', result ? 'OK' : 'NULL')
+      logger.log('[action] generateTranscriptSummary result:', result ? 'OK' : 'NULL')
       if (!result) return { success: false, video: updatedVideo, error: 'Failed to generate summary.' }
       return { success: true, summary: result, video: updatedVideo }
     }
 
-    console.log('[action] no transcript, calling generateNewSummary')
+    logger.log('[action] no transcript, calling generateNewSummary')
     const summary = await summaryService.generateNewSummary(
       videoId,
       title,
@@ -234,7 +235,7 @@ export async function refreshVideoSummaryAction(
 
     return { success: true, summary, video: updatedVideo }
   } catch (error) {
-    console.log('Error refreshing summary:', error)
+    logger.log('Error refreshing summary:', error)
     const updatedVideo = await videoRepository.getByYouTubeId(videoId)
     return { success: false, video: updatedVideo, error: 'Failed to refresh summary.' }
   }
@@ -268,7 +269,7 @@ export async function getSummaryAction(
 
     return { success: true, summary }
   } catch (error) {
-    console.error('Error getting summary:', error)
+    logger.error('Error getting summary:', error)
     return { success: false, error: 'Failed to get summary.' }
   }
 }
@@ -306,7 +307,7 @@ export async function extractTranscriptAction(videoId: string): Promise<{
       return { success: false, error: result.error || 'Failed to fetch transcript', status: 'failed' }
     }
   } catch (error) {
-    console.error('Error extracting transcript:', error)
+    logger.error('Error extracting transcript:', error)
     return { success: false, error: 'Failed to extract transcript' }
   }
 }
@@ -351,7 +352,7 @@ export async function generateSummaryAction(videoId: string): Promise<{
     }
     return { success: true, summary: result.text, status: 'complete' }
   } catch (error) {
-    console.error('Error generating summary:', error)
+    logger.error('Error generating summary:', error)
     return { success: false, error: 'Failed to generate summary' }
   }
 }
@@ -391,7 +392,7 @@ export async function refreshAllChannelsAction(): Promise<{
 
     return { success: true, refreshed, deleted, newCount }
   } catch (error) {
-    console.error('Error refreshing all channels:', error)
+    logger.error('Error refreshing all channels:', error)
     return { success: false, refreshed: 0, deleted: 0, newCount: 0, error: 'Failed to refresh channels.' }
   }
 }

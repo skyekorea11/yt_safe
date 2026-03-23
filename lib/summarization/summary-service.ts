@@ -2,6 +2,7 @@ import { getTranscriptProvider } from '@/lib/transcript/transcript-provider'
 import { DescriptionBasedSummarizer, getLocalSummarizer, HeuristicTranscriptSummarizer } from '@/lib/summarization/local-summarizer'
 import { videoRepository } from '@/lib/supabase/videos'
 import { buildHeuristicSummary, chunkTranscript, cleanTranscript, ensureKoreanSummary, formatSummaryText } from '@/lib/utils/transcript'
+import { logger } from '@/lib/logger'
 
 /**
  * Summary service orchestrates transcript extraction and summarization
@@ -95,7 +96,7 @@ export const summaryService = {
 
         if (!response.ok) {
           const errText = await response.text()
-          console.warn('[summary] transcript translation failed:', response.status, errText)
+          logger.warn('[summary] transcript translation failed:', response.status, errText)
           continue
         }
 
@@ -105,7 +106,7 @@ export const summaryService = {
           translatedParts.push(out.trim())
         }
       } catch (error) {
-        console.warn('[summary] transcript translation error:', error)
+        logger.warn('[summary] transcript translation error:', error)
       }
     }
 
@@ -397,7 +398,7 @@ export const summaryService = {
         if (!extracted) continue
         return extracted
       } catch (error) {
-        console.warn('[summary] summarize.tech fetch failed:', error)
+        logger.warn('[summary] summarize.tech fetch failed:', error)
       }
     }
     return null
@@ -429,7 +430,7 @@ export const summaryService = {
         if (this.isLowQualityExternalSummary(extracted)) continue
         return extracted
       } catch (error) {
-        console.warn('[summary] briefyou fetch failed:', error)
+        logger.warn('[summary] briefyou fetch failed:', error)
       }
     }
 
@@ -452,7 +453,7 @@ export const summaryService = {
     if (this.isSparseSummary(ensured)) return null
     if (this.isLowQualityExternalSummary(ensured)) return null
     if (!this.isRelevantToVideo(ensured, title, description)) {
-      console.warn(`[summary] external summary rejected as irrelevant: ${videoId}`)
+      logger.warn(`[summary] external summary rejected as irrelevant: ${videoId}`)
       return null
     }
 
@@ -525,7 +526,7 @@ export const summaryService = {
       // 캐시 없음 또는 forceRefresh → 전체 파이프라인 실행
       return await this.generateNewSummary(videoId, title, description, useTranscriptPipeline, forceRefresh)
     } catch (error) {
-      console.error('Error getting summary:', error)
+      logger.error('Error getting summary:', error)
       return null
     }
   },
@@ -563,7 +564,7 @@ export const summaryService = {
       // transcript가 아직 없으면 추출 시도
       if ((!transcript || forceTranscriptRefetch) && useTranscriptPipeline) {
         if (transcriptProvider.isAvailable()) {
-          console.log(`[summary] extracting transcript for ${videoId} via ${transcriptProvider.getName()}`)
+          logger.log(`[summary] extracting transcript for ${videoId} via ${transcriptProvider.getName()}`)
           await videoRepository.updateTranscript(videoId, '', 'pending')
 
           try {
@@ -576,11 +577,11 @@ export const summaryService = {
               await videoRepository.updateTranscript(videoId, '', status)
             }
           } catch (err) {
-            console.log('[summary] transcript extraction error:', err)
+            logger.log('[summary] transcript extraction error:', err)
             await videoRepository.updateTranscript(videoId, '', 'failed')
           }
         } else {
-          console.log('[summary] no transcript provider available')
+          logger.log('[summary] no transcript provider available')
           await videoRepository.updateTranscript(videoId, '', 'failed')
         }
       }
@@ -598,7 +599,7 @@ export const summaryService = {
       if (external) return external
       return await this.generateDescriptionSummary(videoId, title, description)
     } catch (error) {
-      console.error('[summary] Error generating new summary:', error)
+      logger.error('[summary] Error generating new summary:', error)
       return null
     }
   },
@@ -616,7 +617,7 @@ export const summaryService = {
       try {
         summary = await local.summarize(sourceText, 180)
       } catch (error) {
-        console.error('[summary] local description summarizer failed:', error)
+        logger.error('[summary] local description summarizer failed:', error)
       }
     }
 
@@ -666,7 +667,7 @@ export const summaryService = {
       if (!summary) {
         summarizer = getLocalSummarizer()
         if (summarizer.isAvailable()) {
-          console.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
+          logger.log(`[summary] summarizing ${videoId} with ${summarizer.getName()}`)
           const shouldChunk =
             this.isChunkedSummarizationEnabled() &&
             transcriptForSummary.length >= this.chunkSummarizationThreshold()
@@ -693,12 +694,12 @@ export const summaryService = {
             summary = await summarizer.summarize(transcriptForSummary, 200)
           }
         } else {
-          console.warn('[summary] summarizer not available')
+          logger.warn('[summary] summarizer not available')
         }
       }
 
       if (!summary && summarizer && !(summarizer instanceof HeuristicTranscriptSummarizer)) {
-        console.warn('[summary] primary summarizer failed, falling back to heuristic transcript summary')
+        logger.warn('[summary] primary summarizer failed, falling back to heuristic transcript summary')
         summary = await new HeuristicTranscriptSummarizer().summarize(transcriptForSummary, 200)
       }
 
@@ -784,7 +785,7 @@ export const summaryService = {
         return { text: message, sourceType: 'transcript' }
       }
     } catch (error) {
-      console.error('[summary] Error summarizing transcript:', error)
+      logger.error('[summary] Error summarizing transcript:', error)
       return null
     }
   },
@@ -811,14 +812,14 @@ export const summaryService = {
     const pending = await videoRepository.getPendingSummaries()
     if (pending.length === 0) return
 
-    console.log(`[summary-worker] Processing ${pending.length} pending summaries`)
+    logger.log(`[summary-worker] Processing ${pending.length} pending summaries`)
 
     for (const video of pending) {
       await videoRepository.updateSummaryStatus(video.youtube_video_id, 'processing')
       try {
         await this.generateNewSummary(video.youtube_video_id, video.title, video.description, true)
       } catch (err) {
-        console.error(`[summary-worker] Failed for ${video.youtube_video_id}:`, err)
+        logger.error(`[summary-worker] Failed for ${video.youtube_video_id}:`, err)
         await videoRepository.updateSummaryStatus(video.youtube_video_id, 'failed')
       }
     }

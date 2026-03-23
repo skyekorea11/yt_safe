@@ -5,6 +5,7 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { chunkTranscript, cleanTranscript, isTranscriptTooShort } from '@/lib/utils/transcript'
+import { logger } from '@/lib/logger'
 
 const API_KEY = process.env.GEMINI_API_KEY
 
@@ -30,7 +31,7 @@ export const geminiSummarizer = {
     config: GeminiSummarizerConfig = {}
   ): Promise<string | null> {
     if (!this.isAvailable()) {
-      console.warn('Gemini API not configured (GEMINI_API_KEY not set)')
+      logger.warn('Gemini API not configured (GEMINI_API_KEY not set)')
       return null
     }
 
@@ -69,7 +70,7 @@ export const geminiSummarizer = {
 
       return combined
     } catch (error) {
-      console.error('Error summarizing with Gemini:', error)
+      logger.error('Error summarizing with Gemini:', error)
       return null
     }
   },
@@ -96,7 +97,7 @@ ${chunk}`
 
       return text ? text.trim() : null
     } catch (error) {
-      console.error('Error summarizing chunk:', error)
+      logger.error('Error summarizing chunk:', error)
       return null
     }
   },

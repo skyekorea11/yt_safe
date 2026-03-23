@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises'
 import path from 'path'
 import { execFileSync } from 'child_process'
 import { createClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 
 interface VideoRow {
   youtube_video_id: string
@@ -32,7 +33,7 @@ function isYtDlpAvailable(): boolean {
     execFileSync(YT_DLP_PATH, ['--version'], { stdio: 'ignore' })
     return true
   } catch (error) {
-    console.error('yt-dlp not available:', error)
+    logger.error('yt-dlp not available:', error)
     return false
   }
 }
@@ -216,13 +217,13 @@ async function main() {
   }
 
   if (targets.length === 0) {
-    console.log('No target videos found.')
+    logger.log('No target videos found.')
     return
   }
 
-  console.log('Transcript sync started (yt-dlp worker)')
-  console.log(`yt-dlp path=${YT_DLP_PATH} | use_browser_cookies=${USE_BROWSER_COOKIES}`)
-  console.log(`Targets: ${targets.length} | all=${options.all} | limit=${options.limit}${options.videoId ? ` | video=${options.videoId}` : ''}`)
+  logger.log('Transcript sync started (yt-dlp worker)')
+  logger.log(`yt-dlp path=${YT_DLP_PATH} | use_browser_cookies=${USE_BROWSER_COOKIES}`)
+  logger.log(`Targets: ${targets.length} | all=${options.all} | limit=${options.limit}${options.videoId ? ` | video=${options.videoId}` : ''}`)
 
   let extracted = 0
   let notAvailable = 0
@@ -231,7 +232,7 @@ async function main() {
   for (const [index, video] of targets.entries()) {
     const id = video.youtube_video_id
     const title = video.title || '(no title)'
-    console.log(`[${index + 1}/${targets.length}] ${id} - ${title}`)
+    logger.log(`[${index + 1}/${targets.length}] ${id} - ${title}`)
 
     await supabase
       .from('videos')
@@ -256,9 +257,9 @@ async function main() {
       if (error) {
         failed += 1
         extracted -= 1
-        console.error(`  -> DB update failed: ${error.message}`)
+        logger.error(`  -> DB update failed: ${error.message}`)
       } else {
-        console.log(`  -> extracted (${result.text.length} chars)`)
+        logger.log(`  -> extracted (${result.text.length} chars)`)
       }
       continue
     }
@@ -273,7 +274,7 @@ async function main() {
           updated_at: new Date().toISOString(),
         })
         .eq('youtube_video_id', id)
-      console.log('  -> not available')
+      logger.log('  -> not available')
       continue
     }
 
@@ -286,14 +287,14 @@ async function main() {
         updated_at: new Date().toISOString(),
       })
       .eq('youtube_video_id', id)
-    console.log(`  -> failed: ${result.error || 'unknown error'}`)
+    logger.log(`  -> failed: ${result.error || 'unknown error'}`)
   }
 
-  console.log('Transcript sync complete')
-  console.log(`extracted=${extracted}, not_available=${notAvailable}, failed=${failed}`)
+  logger.log('Transcript sync complete')
+  logger.log(`extracted=${extracted}, not_available=${notAvailable}, failed=${failed}`)
 }
 
 main().catch((err) => {
-  console.error(err)
+  logger.error(err)
   process.exit(1)
 })

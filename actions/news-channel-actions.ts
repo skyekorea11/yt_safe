@@ -3,6 +3,7 @@
 import { youtubeService } from '@/lib/youtube/youtube-service'
 import { newsChannelRepository } from '@/lib/supabase/channels'
 import { NewsChannel } from '@/types'
+import { logger } from '@/lib/logger'
 
 export async function addNewsChannelAction(
   identifier: string,
@@ -35,7 +36,7 @@ export async function addNewsChannelAction(
 
     return { success: true, channel: saved }
   } catch (error) {
-    console.error('Error adding news channel:', error)
+    logger.error('Error adding news channel:', error)
     return { success: false, error: 'Failed to add news channel.' }
   }
 }
@@ -49,7 +50,7 @@ export async function removeNewsChannelAction(youtubeChannelId: string): Promise
     if (!ok) return { success: false, error: 'Failed to remove news channel.' }
     return { success: true }
   } catch (error) {
-    console.error('Error removing news channel:', error)
+    logger.error('Error removing news channel:', error)
     return { success: false, error: 'Failed to remove news channel.' }
   }
 }

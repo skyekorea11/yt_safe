@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState'
 import { LoadingGridSkeleton } from '@/components/LoadingSkeleton'
 import { Heart, ExternalLink, RefreshCw, Newspaper, ChevronDown } from 'lucide-react'
 import { isValidStoredVideo } from '@/lib/utils/video-validity'
+import { logger } from '@/lib/logger'
 
 interface RelatedNewsItem {
   title: string
@@ -144,7 +145,7 @@ export default function FavoritesPage() {
         setFavoriteRankById({})
       }
     } catch (error) {
-      console.error('Error loading data:', error)
+      logger.error('Error loading data:', error)
       setChannels(MOCK_CHANNELS)
       setAllVideos(MOCK_VIDEOS)
       setFavoriteIds(new Set())
@@ -175,7 +176,7 @@ export default function FavoritesPage() {
       setNewsByVideoId(prev => ({ ...prev, [videoId]: Array.isArray(data?.articles) ? data.articles : [] }))
       setNewsCacheKeyByVideoId(prev => ({ ...prev, [videoId]: cacheKey }))
     } catch (error) {
-      console.error(error)
+      logger.error(error)
     } finally {
       setNewsLoadingByVideoId(prev => ({ ...prev, [videoId]: false }))
     }
@@ -209,7 +210,7 @@ export default function FavoritesPage() {
         })
       }
     } catch (err) {
-      console.error(err)
+      logger.error(err)
       setFavoriteIds(prev => {
         const next = new Set(prev)
         isCurrentlyFav ? next.add(videoId) : next.delete(videoId)
@@ -378,7 +379,7 @@ export default function FavoritesPage() {
     )
     const result = await channelRepository.updateChannelGroup(channelId, group)
     if (!result.success) {
-      console.error('채널 분류 변경 실패:', result.message || 'unknown_error')
+      logger.error('채널 분류 변경 실패:', result.message || 'unknown_error')
       setChannels(prevChannels)
     }
   }
@@ -397,7 +398,7 @@ export default function FavoritesPage() {
     )
     const result = await channelRepository.updateSortOrders(orderedChannelIds)
     if (!result.success) {
-      console.error('채널 순서 저장 실패:', result.message || 'unknown_error')
+      logger.error('채널 순서 저장 실패:', result.message || 'unknown_error')
       await loadAll()
     }
   }

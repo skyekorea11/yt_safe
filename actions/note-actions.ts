@@ -6,6 +6,7 @@
  */
 
 import { videoFavoriteRepository, videoNoteRepository } from '@/lib/supabase/videos'
+import { logger } from '@/lib/logger'
 
 /**
  * Update video favorite status
@@ -15,7 +16,7 @@ export async function updateVideoFavoriteAction(videoId: string, isFavorite: boo
     const result = await videoFavoriteRepository.toggle(videoId, isFavorite)
     return !!result
   } catch (error) {
-    console.error('Error updating favorite:', error)
+    logger.error('Error updating favorite:', error)
     return false
   }
 }
@@ -28,7 +29,7 @@ export async function updateVideoNoteAction(videoId: string, note: string): Prom
     const result = await videoNoteRepository.upsert(videoId, note)
     return !!result
   } catch (error) {
-    console.error('Error updating note:', error)
+    logger.error('Error updating note:', error)
     return false
   }
 }
@@ -41,7 +42,7 @@ export async function deleteVideoNoteAction(videoId: string): Promise<boolean> {
     const result = await videoNoteRepository.deleteByVideoId(videoId)
     return result
   } catch (error) {
-    console.error('Error deleting note:', error)
+    logger.error('Error deleting note:', error)
     return false
   }
 }
@@ -54,7 +55,7 @@ export async function getVideoFavoriteAction(videoId: string): Promise<boolean> 
     const favorite = await videoFavoriteRepository.getByVideoId(videoId)
     return favorite?.is_favorite || false
   } catch (error) {
-    console.error('Error getting favorite:', error)
+    logger.error('Error getting favorite:', error)
     return false
   }
 }
@@ -67,7 +68,7 @@ export async function getVideoNoteAction(videoId: string): Promise<string | null
     const note = await videoNoteRepository.getByVideoId(videoId)
     return note?.note || null
   } catch (error) {
-    console.error('Error getting note:', error)
+    logger.error('Error getting note:', error)
     return null
   }
 }

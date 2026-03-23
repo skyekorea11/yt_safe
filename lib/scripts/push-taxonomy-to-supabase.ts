@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 
 type Row = Record<string, string>
 
@@ -80,14 +81,14 @@ async function main() {
   await upsertBatched(supabase, 'taxonomy_industry_mapping', mappingRows, 'taxonomy_id,subindustry_id')
   await upsertBatched(supabase, 'stock_example_mapping', stockRows, 'ticker,subindustry_id')
 
-  console.log('Pushed taxonomy assets to Supabase')
-  console.log(`content_taxonomy: ${taxonomyRows.length}`)
-  console.log(`industry_classification: ${industryRows.length}`)
-  console.log(`taxonomy_industry_mapping: ${mappingRows.length}`)
-  console.log(`stock_example_mapping: ${stockRows.length}`)
+  logger.log('Pushed taxonomy assets to Supabase')
+  logger.log(`content_taxonomy: ${taxonomyRows.length}`)
+  logger.log(`industry_classification: ${industryRows.length}`)
+  logger.log(`taxonomy_industry_mapping: ${mappingRows.length}`)
+  logger.log(`stock_example_mapping: ${stockRows.length}`)
 }
 
 main().catch((err) => {
-  console.error(err)
+  logger.error(err)
   process.exit(1)
 })

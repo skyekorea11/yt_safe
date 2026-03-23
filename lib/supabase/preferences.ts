@@ -1,4 +1,5 @@
 import { supabase } from './client'
+import { logger } from '@/lib/logger'
 
 export interface AppPreferences {
   id: string
@@ -21,7 +22,7 @@ export const appPreferencesRepository = {
       if (error && error.code !== 'PGRST116') throw error
       return data || null
     } catch (error) {
-      console.error('Error fetching app preferences:', error)
+      logger.error('Error fetching app preferences:', error)
       return null
     }
   },
@@ -42,7 +43,7 @@ export const appPreferencesRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error upserting app preferences:', error)
+      logger.error('Error upserting app preferences:', error)
       return false
     }
   },

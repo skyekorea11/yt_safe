@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { videoRepository } from '@/lib/supabase/videos'
 import { supabase } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 interface NewsItem {
   title: string
@@ -1818,7 +1819,7 @@ export async function GET(
       channelModes,
     })
   } catch (error) {
-    console.error('Error fetching related news:', error)
+    logger.error('Error fetching related news:', error)
     return NextResponse.json({ success: false, error: 'Failed to fetch related news' }, { status: 500 })
   }
 }

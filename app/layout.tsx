@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import SummaryDoneNotification from "@/components/SummaryDoneNotification";
+import { API_MAX_DURATION_SECONDS } from "@/lib/config";
 
-export const maxDuration = 60
+export const maxDuration = API_MAX_DURATION_SECONDS
 
 export const metadata: Metadata = {
   title: "My Youtube Signal",

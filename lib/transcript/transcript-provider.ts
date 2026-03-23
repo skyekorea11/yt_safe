@@ -1,5 +1,10 @@
 import { execFileSync } from 'child_process'
 import { transcriptUsageRepository } from '@/lib/supabase/videos'
+import {
+import { logger } from '@/lib/logger'
+  DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY,
+  DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH,
+} from '@/lib/config'
 
 /**
  * Transcript provider - yt-dlp 기반 자막 추출
@@ -29,8 +34,8 @@ const IMPERSONATE_TARGET = process.env.YT_DLP_IMPERSONATE || 'edge';
 const TRANSCRIPT_SERVICE_URL = process.env.TRANSCRIPT_SERVICE_URL?.trim() || '';
 const TRANSCRIPT_SERVICE_TOKEN = process.env.TRANSCRIPT_SERVICE_TOKEN?.trim() || '';
 const TRANSCRIPT_SERVICE_TIMEOUT_MS = Number(process.env.TRANSCRIPT_SERVICE_TIMEOUT_MS || '15000');
-const AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY || '120');
-const AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH || '1500');
+const AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY || DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_DAY);
+const AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH = Number(process.env.AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH || DEFAULT_AZURE_TRANSCRIPT_MAX_CALLS_PER_MONTH);
 const AZURE_TRANSCRIPT_CAP_STRICT = (process.env.AZURE_TRANSCRIPT_CAP_STRICT || 'true').toLowerCase() !== 'false';
 const configuredYtDlpPath = process.env.YT_DLP_PATH?.trim();
 const YT_DLP_CANDIDATES = [
@@ -38,7 +43,6 @@ const YT_DLP_CANDIDATES = [
   'yt-dlp',
   '/opt/homebrew/bin/yt-dlp',
   '/usr/local/bin/yt-dlp',
-  '/Users/skye/bin/yt-dlp',
 ].filter((value): value is string => Boolean(value));
 
 function resolveYtDlpPath(): string | null {
@@ -157,7 +161,7 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
     }
 
     try {
-      console.log('[yt-dlp-standalone] 한국어 자막 시도 중... (edge impersonate)');
+      logger.log('[yt-dlp-standalone] 한국어 자막 시도 중... (edge impersonate)');
 
       await sleep(8000);
 
@@ -194,7 +198,7 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
           await exec(ytDlpPath, buildArgs(lang, true));
         } catch (error) {
           if (!isImpersonateUnsupported(error)) throw error;
-          console.warn('[yt-dlp-standalone] impersonate 미지원, 일반 모드로 재시도');
+          logger.warn('[yt-dlp-standalone] impersonate 미지원, 일반 모드로 재시도');
           await exec(ytDlpPath, buildArgs(lang, false));
         }
       };
@@ -209,7 +213,7 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
       );
 
       if (!vttFile) {
-        console.log('[yt-dlp-standalone] ko 없음 → en 시도');
+        logger.log('[yt-dlp-standalone] ko 없음 → en 시도');
         await sleep(15000);
 
         await runLanguage('en');
@@ -244,7 +248,7 @@ export class YtDlpStandaloneProvider implements TranscriptProvider {
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[yt-dlp-standalone] 에러:', message);
+      logger.error('[yt-dlp-standalone] 에러:', message);
       return { status: 'FAILED', error: message };
     } finally {
       try {

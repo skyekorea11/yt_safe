@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger'
 // Rate limiting: minimum 8s between Gemini requests
 let lastGeminiRequestTime = 0
 
@@ -65,7 +66,7 @@ export class GeminiSummarizer implements LocalSummarizer {
 
   async summarize(text: string, _maxLength = 200): Promise<string | null> {
     if (!this.apiKey) {
-      console.warn('Gemini API key not configured')
+      logger.warn('Gemini API key not configured')
       return null
     }
 
@@ -99,7 +100,7 @@ export class GeminiSummarizer implements LocalSummarizer {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
         const delay = 8000 * Math.pow(2, attempt - 1)
-        console.warn(`Gemini 429, retrying in ${delay}ms (attempt ${attempt + 1})`)
+        logger.warn(`Gemini 429, retrying in ${delay}ms (attempt ${attempt + 1})`)
         await new Promise(r => setTimeout(r, delay))
         lastGeminiRequestTime = Date.now()
       }
@@ -119,14 +120,14 @@ export class GeminiSummarizer implements LocalSummarizer {
         if (response.status === 429) continue
         if (!response.ok) {
           const errText = await response.text()
-          console.error('Gemini API error:', response.status, errText)
+          logger.error('Gemini API error:', response.status, errText)
           return null
         }
         const data = await response.json()
         const result = data?.candidates?.[0]?.content?.parts?.[0]?.text
         return typeof result === 'string' ? result.trim() : null
       } catch (err) {
-        console.error('Gemini summarization error:', err)
+        logger.error('Gemini summarization error:', err)
         return null
       }
     }
@@ -177,7 +178,7 @@ export class OllamaLocalSummarizer implements LocalSummarizer {
         }),
       })
       if (!resp.ok) {
-        console.error('Ollama request failed', resp.status, await resp.text())
+        logger.error('Ollama request failed', resp.status, await resp.text())
         return null
       }
       const data = await resp.json()
@@ -187,7 +188,7 @@ export class OllamaLocalSummarizer implements LocalSummarizer {
       }
       return null
     } catch (err) {
-      console.error('Ollama summarization error:', err)
+      logger.error('Ollama summarization error:', err)
       return null
     }
   }
@@ -268,7 +269,7 @@ export class HttpSummarizerService implements LocalSummarizer {
     // TODO: Implement HTTP POST to external summarization service
     // 1. POST to {serviceUrl}/summarize with { text, maxLength }
     // 2. Parse response and return { summary }
-    console.warn('HttpSummarizerService not yet implemented')
+    logger.warn('HttpSummarizerService not yet implemented')
     return null
   }
 
@@ -296,7 +297,7 @@ export function getLocalSummarizer(): LocalSummarizer {
   if (geminiKey) {
     const gemini = new GeminiSummarizer(geminiKey)
     if (gemini.isAvailable()) {
-      console.log('Using Gemini summarizer')
+      logger.log('Using Gemini summarizer')
       return gemini
     }
   }
@@ -304,16 +305,16 @@ export function getLocalSummarizer(): LocalSummarizer {
   const serviceUrl = process.env.SUMMARIZER_SERVICE_URL
 
   if (serviceUrl) {
-    console.warn('HTTP summarizer service not yet implemented')
+    logger.warn('HTTP summarizer service not yet implemented')
   }
 
   const ollama = new OllamaLocalSummarizer()
   if (ollama.isAvailable()) {
-    console.log('Using Ollama summarizer')
+    logger.log('Using Ollama summarizer')
     return ollama
   }
 
   // Always fall back to description-based summarizer
-  console.log('Using heuristic transcript summarizer (fallback)')
+  logger.log('Using heuristic transcript summarizer (fallback)')
   return new HeuristicTranscriptSummarizer()
 }

@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { Plus, AlertCircle, CheckCircle } from 'lucide-react'
 import { addChannelAction } from '@/actions/channel-actions'
 import { cn } from '@/lib/utils'
+import { logger } from '@/lib/logger'
 
 interface ChannelAddFormProps {
   onSuccess?: () => void
@@ -55,7 +56,7 @@ export default function ChannelAddForm({
       const errorText = '오류가 발생했습니다.'
       setMessage({ type: 'error', text: errorText })
       onError?.(errorText)
-      console.error(error)
+      logger.error(error)
     } finally {
       setIsLoading(false)
     }

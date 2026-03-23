@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger'
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -6,13 +8,13 @@ export async function register() {
       try {
         const { refreshAllChannelsAction } = await import('./actions/channel-actions')
         await refreshAllChannelsAction()
-        console.log('[scheduler] Auto-refresh completed')
+        logger.log('[scheduler] Auto-refresh completed')
       } catch (err) {
-        console.error('[scheduler] Auto-refresh failed:', err)
+        logger.error('[scheduler] Auto-refresh failed:', err)
       }
     }
 
     setInterval(runRefresh, INTERVAL_MS)
-    console.log('[scheduler] Auto-refresh scheduled every 6 hours')
+    logger.log('[scheduler] Auto-refresh scheduled every 6 hours')
   }
 }

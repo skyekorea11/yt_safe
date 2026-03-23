@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { videoRepository } from '@/lib/supabase/videos'
 import { summaryService } from '@/lib/summarization/summary-service'
+import { parseSummarizeBody } from '@/lib/api/validate'
+import { logger } from '@/lib/logger'
 
 export async function POST(
   request: NextRequest,
@@ -12,9 +14,9 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { videoId } = await params
-    const body = await request.json().catch(() => ({}))
-    const force = Boolean(body?.force)
-    const useTranscriptPipeline = body?.useTranscriptPipeline !== false
+    const { force, useTranscriptPipeline } = parseSummarizeBody(
+      await request.json().catch(() => null)
+    )
 
     if (!videoId) {
       return NextResponse.json({ success: false, error: 'Video ID is required' }, { status: 400 })
@@ -66,7 +68,7 @@ export async function POST(
       { status: 200 }
     )
   } catch (error) {
-    console.error('Error in summarize API:', error)
+    logger.error('Error in summarize API:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

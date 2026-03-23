@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTranscriptProvider } from '@/lib/transcript/transcript-provider'
 import { videoRepository } from '@/lib/supabase/videos'
+import { parseTranscriptBody } from '@/lib/api/validate'
+import { logger } from '@/lib/logger'
 
 export async function POST(
   request: NextRequest,
@@ -14,13 +16,10 @@ export async function POST(
     const { videoId } = await params
 
     // parse body: may optionally contain videoIds array for batch processing
-    const body = await request.json().catch(() => ({}))
-    const ids: string[] = []
-    const force = body.force === true
-
-    if (Array.isArray(body.videoIds)) {
-      ids.push(...body.videoIds)
-    }
+    const { force, videoIds: bodyIds } = parseTranscriptBody(
+      await request.json().catch(() => null)
+    )
+    const ids: string[] = [...bodyIds]
     if (videoId && videoId !== 'batch') {
       ids.push(videoId)
     }
@@ -105,7 +104,7 @@ export async function POST(
 
     // otherwise invoke provider normally (single)
     const provider = getTranscriptProvider()
-    console.log('using transcript provider:', provider.getName())
+    logger.log('using transcript provider: ' + provider.getName())
 
     if (!provider.isAvailable()) {
       return NextResponse.json(
@@ -137,7 +136,7 @@ export async function POST(
       )
     }
   } catch (error) {
-    console.error('Error in transcript API:', error)
+    logger.error('Error in transcript API:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

@@ -1,4 +1,5 @@
 import { YouTubeChannel, YouTubeVideo, YouTubePlaylistItem } from '@/types'
+import { logger } from '@/lib/logger'
 
 /**
  * YouTube Data API v3 service
@@ -52,7 +53,7 @@ export const youtubeService = {
    */
   async resolveChannel(identifier: string): Promise<YouTubeChannel | null> {
     if (!API_KEY) {
-      console.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
+      logger.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
       return null
     }
 
@@ -72,7 +73,7 @@ export const youtubeService = {
         if (channelId) {
           url += `&id=${channelId}`
         } else {
-          console.error('Could not extract channel ID from URL')
+          logger.error('Could not extract channel ID from URL')
           return null
         }
       } else if (identifier.length === 24) {
@@ -87,18 +88,18 @@ export const youtubeService = {
       const data = (await response.json()) as { items?: YouTubeChannel[] } | YouTubeErrorResponse
 
       if ('error' in data) {
-        console.error('YouTube API error:', data.error)
+        logger.error('YouTube API error:', data.error)
         return null
       }
 
       if (!data.items || data.items.length === 0) {
-        console.error('Channel not found')
+        logger.error('Channel not found')
         return null
       }
 
       return data.items[0]
     } catch (error) {
-      console.error('Error resolving channel:', error)
+      logger.error('Error resolving channel:', error)
       return null
     }
   },
@@ -109,7 +110,7 @@ export const youtubeService = {
    */
   async getUploadsPlaylistId(channelId: string): Promise<string | null> {
     if (!API_KEY) {
-      console.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
+      logger.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
       return null
     }
 
@@ -119,18 +120,18 @@ export const youtubeService = {
       const data = (await response.json()) as { items?: YouTubeChannel[] } | YouTubeErrorResponse
 
       if ('error' in data) {
-        console.error('YouTube API error:', data.error)
+        logger.error('YouTube API error:', data.error)
         return null
       }
 
       if (!data.items || data.items.length === 0) {
-        console.error('Channel not found')
+        logger.error('Channel not found')
         return null
       }
 
       return data.items[0].contentDetails?.relatedPlaylists.uploads || null
     } catch (error) {
-      console.error('Error getting uploads playlist ID:', error)
+      logger.error('Error getting uploads playlist ID:', error)
       return null
     }
   },
@@ -146,7 +147,7 @@ export const youtubeService = {
     options?: { allowCaptionlessFallback?: boolean; allowLiveKeyword?: boolean }
   ): Promise<YouTubePlaylistItem[]> {
     if (!API_KEY) {
-      console.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
+      logger.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
       return []
     }
 
@@ -154,7 +155,7 @@ export const youtubeService = {
       // Get the uploads playlist ID
       const uploadsPlaylistId = await this.getUploadsPlaylistId(channelId)
       if (!uploadsPlaylistId) {
-        console.error('Could not get uploads playlist ID')
+        logger.error('Could not get uploads playlist ID')
         return []
       }
 
@@ -165,7 +166,7 @@ export const youtubeService = {
       const data = (await response.json()) as { items?: YouTubePlaylistItem[] } | YouTubeErrorResponse
 
       if ('error' in data) {
-        console.error('YouTube API error:', data.error)
+        logger.error('YouTube API error:', data.error)
         return []
       }
 
@@ -224,7 +225,7 @@ export const youtubeService = {
 
       return relaxedFiltered.slice(0, maxResults)
     } catch (error) {
-      console.error('Error getting videos for channel:', error)
+      logger.error('Error getting videos for channel:', error)
       return []
     }
   },
@@ -235,7 +236,7 @@ export const youtubeService = {
    */
   async getVideoDetails(videoIds: string[]): Promise<YouTubeVideo[]> {
     if (!API_KEY) {
-      console.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
+      logger.warn('NEXT_PUBLIC_YOUTUBE_API_KEY not set')
       return []
     }
 
@@ -249,13 +250,13 @@ export const youtubeService = {
       const data = (await response.json()) as { items?: YouTubeVideo[] } | YouTubeErrorResponse
 
       if ('error' in data) {
-        console.error('YouTube API error:', data.error)
+        logger.error('YouTube API error:', data.error)
         return []
       }
 
       return data.items || []
     } catch (error) {
-      console.error('Error getting video details:', error)
+      logger.error('Error getting video details:', error)
       return []
     }
   },

@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Video, VideoNote, VideoFavorite } from '@/types'
 import { updateVideoFavoriteAction, updateVideoNoteAction, deleteVideoNoteAction } from '@/actions/note-actions'
+import { logger } from '@/lib/logger'
 
 /**
  * Hook for managing video favorites with optimistic UI updates
@@ -33,7 +34,7 @@ export function useVideoFavorite(videoId: string, initialFavorite = false) {
     } catch (err) {
       setIsFavorite(!isFavorite)
       setError('An error occurred')
-      console.error(err)
+      logger.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -85,7 +86,7 @@ export function useVideoNote(videoId: string) {
       }
     } catch (err) {
       setError('An error occurred')
-      console.error(err)
+      logger.error(err)
     } finally {
       setIsLoading(false)
     }
@@ -110,7 +111,7 @@ export function useVideoNote(videoId: string) {
       }
     } catch (err) {
       setError('An error occurred')
-      console.error(err)
+      logger.error(err)
     } finally {
       setIsLoading(false)
     }

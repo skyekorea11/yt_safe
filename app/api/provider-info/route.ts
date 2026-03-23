@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { summaryService } from '@/lib/summarization/summary-service'
 import { supabase } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
 
 async function getDbDiagnostics() {
   const hasSupabaseUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim())
@@ -49,7 +50,7 @@ export async function GET() {
     const db = await getDbDiagnostics()
     return NextResponse.json({ success: true, transcript, summarizer, db })
   } catch (err) {
-    console.error('Provider info error', err)
+    logger.error('Provider info error', err)
     return NextResponse.json({ success: false, error: String(err) }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { newsChannelRepository } from '@/lib/supabase/channels'
 import { youtubeService } from '@/lib/youtube/youtube-service'
+import { logger } from '@/lib/logger'
 
 interface LatestNewsTitle {
   youtubeVideoId: string
@@ -79,7 +80,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       overseasItems,
     })
   } catch (error) {
-    console.error('Error fetching news channel titles:', error)
+    logger.error('Error fetching news channel titles:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch news channel titles' },
       { status: 500 }

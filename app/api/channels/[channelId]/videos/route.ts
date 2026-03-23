@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { youtubeService } from '@/lib/youtube/youtube-service'
+import { logger } from '@/lib/logger'
 
 interface ChannelVideoItem {
   youtubeVideoId: string
@@ -43,7 +44,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, items })
   } catch (error) {
-    console.error('Error fetching channel videos:', error)
+    logger.error('Error fetching channel videos:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch channel videos' },
       { status: 500 }

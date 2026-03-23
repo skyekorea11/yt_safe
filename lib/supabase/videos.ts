@@ -1,5 +1,6 @@
 import { supabase } from './client'
 import { TranscriptUsageEvent, Video, VideoNote, VideoFavorite } from '@/types'
+import { logger } from '@/lib/logger'
 
 /**
  * Video repository for CRUD operations
@@ -18,24 +19,24 @@ export const videoRepository = {
         .order('published_at', { ascending: false })
 
       if (error) {
-        console.error('Supabase error fetching videos raw:', error)
+        logger.error('Supabase error fetching videos raw:', error)
         try {
-          console.error('Supabase error fetching videos serialized:',
+          logger.error('Supabase error fetching videos serialized:',
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
         } catch {}
-        console.error('Supabase error fetching videos:', {
+        logger.error('Supabase error fetching videos:', {
           message: error.message,
           code: error.code,
           details: error.details,
         })
         if (error.code === 'PGRST205') {
-          console.warn('It looks like the videos table does not exist. Did you run lib/supabase/schema.sql against your database?')
+          logger.warn('It looks like the videos table does not exist. Did you run lib/supabase/schema.sql against your database?')
         }
         throw error
       }
       return data || []
     } catch (error) {
-      console.error('Error fetching videos:', {
+      logger.error('Error fetching videos:', {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       })
@@ -58,7 +59,7 @@ export const videoRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching videos by channel:', error)
+      logger.error('Error fetching videos by channel:', error)
       return []
     }
   },
@@ -77,7 +78,7 @@ export const videoRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching latest videos:', error)
+      logger.error('Error fetching latest videos:', error)
       return []
     }
   },
@@ -97,7 +98,7 @@ export const videoRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching videos by ids:', error)
+      logger.error('Error fetching videos by ids:', error)
       return []
     }
   },
@@ -116,7 +117,7 @@ export const videoRepository = {
       if (error && error.code !== 'PGRST116') throw error
       return data || null
     } catch (error) {
-      console.error('Error fetching video:', error)
+      logger.error('Error fetching video:', error)
       return null
     }
   },
@@ -157,7 +158,7 @@ export const videoRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error upserting video:', error)
+      logger.error('Error upserting video:', error)
       return null
     }
   },
@@ -179,7 +180,7 @@ export const videoRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating transcript:', error)
+      logger.error('Error updating transcript:', error)
       return false
     }
   },
@@ -208,7 +209,7 @@ export const videoRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating summary:', error)
+      logger.error('Error updating summary:', error)
       return false
     }
   },
@@ -226,7 +227,7 @@ export const videoRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating summary status:', error)
+      logger.error('Error updating summary status:', error)
       return false
     }
   },
@@ -252,7 +253,7 @@ export const videoRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error updating related news:', error)
+      logger.error('Error updating related news:', error)
       return false
     }
   },
@@ -271,7 +272,7 @@ export const videoRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching pending summaries:', error)
+      logger.error('Error fetching pending summaries:', error)
       return []
     }
   },
@@ -289,7 +290,7 @@ export const videoRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error deleting video:', error)
+      logger.error('Error deleting video:', error)
       return false
     }
   },
@@ -312,7 +313,7 @@ export const videoRepository = {
       if (error) throw error
       return count ?? 0
     } catch (error) {
-      console.error('Error deleting old videos:', error)
+      logger.error('Error deleting old videos:', error)
       return 0
     }
   },
@@ -336,7 +337,7 @@ export const transcriptUsageRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error logging transcript usage event:', error)
+      logger.error('Error logging transcript usage event:', error)
       return false
     }
   },
@@ -352,7 +353,7 @@ export const transcriptUsageRepository = {
       if (error) throw error
       return count ?? 0
     } catch (error) {
-      console.error('Error counting transcript usage events:', error)
+      logger.error('Error counting transcript usage events:', error)
       return null
     }
   },
@@ -374,7 +375,7 @@ export const videoNoteRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching all notes:', error)
+      logger.error('Error fetching all notes:', error)
       return []
     }
   },
@@ -393,7 +394,7 @@ export const videoNoteRepository = {
       if (error && error.code !== 'PGRST116') throw error
       return data || null
     } catch (error) {
-      console.error('Error fetching note:', error)
+      logger.error('Error fetching note:', error)
       return null
     }
   },
@@ -436,7 +437,7 @@ export const videoNoteRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error upserting note:', error)
+      logger.error('Error upserting note:', error)
       return null
     }
   },
@@ -454,7 +455,7 @@ export const videoNoteRepository = {
       if (error) throw error
       return true
     } catch (error) {
-      console.error('Error deleting note:', error)
+      logger.error('Error deleting note:', error)
       return false
     }
   },
@@ -478,7 +479,7 @@ export const videoFavoriteRepository = {
       if (error && error.code !== 'PGRST116') throw error
       return data || null
     } catch (error) {
-      console.error('Error fetching favorite:', error)
+      logger.error('Error fetching favorite:', error)
       return null
     }
   },
@@ -496,7 +497,7 @@ export const videoFavoriteRepository = {
       if (error) throw error
       return data || []
     } catch (error) {
-      console.error('Error fetching favorites:', error)
+      logger.error('Error fetching favorites:', error)
       return []
     }
   },
@@ -539,7 +540,7 @@ export const videoFavoriteRepository = {
       if (error) throw error
       return data || null
     } catch (error) {
-      console.error('Error toggling favorite:', error)
+      logger.error('Error toggling favorite:', error)
       return null
     }
   },
